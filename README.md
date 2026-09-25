@@ -6,6 +6,8 @@ The current app implements milestone 2: a Russian photo-permission flow, a grid 
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
+Step 4.2 supplies the [persistent SQLite index](docs/PERSISTENCE.md): versioned embeddings and OCR, durable processing status, and Russian/English full-text lookup. The storage layer is tested independently; connecting it to foreground photo-library indexing is step 4.3. The viewer's OCR results still remain temporary.
+
 ## Requirements
 
 - Xcode 27 with its iOS platform support, selected as the active developer environment.
@@ -89,6 +91,8 @@ Query tests cover language routing, English bypass, translation failure and miss
 Retrieval tests cover cosine ranking, model compatibility, deterministic ties, corpus integrity, cancellation, and screen-state lifetimes. A separate [development retrieval evaluation](docs/RETRIEVAL.md#run-the-development-evaluation) runs the real models over the manually transferred sample. It is enabled only when the sample exists in the app's data container; a skipped test is not retrieval validation.
 
 OCR tests exercise real Vision recognition on synthetic Russian/English text, rotation, blank images, and long screenshots, plus image limits and tile geometry. Injected-provider/store tests cover no-network requests, unavailable sources, timeouts, cancellation, and stale results. See [OCR.md](docs/OCR.md) for the focused test command and manual phone checks. Synthetic recognition does not establish accuracy on personal photos or prove real iCloud behavior.
+
+Persistence tests use real temporary SQLite databases to check durable results, interrupted jobs, stale-write rejection, independent processing versions, OCR full-text updates, transaction rollback, codecs, schema checks, and backup/protection attributes. See [PERSISTENCE.md](docs/PERSISTENCE.md) for the focused command and remaining device checks.
 
 Run the behavioral tests on an installed simulator using Release optimization for the large image fixtures. `ENABLE_TESTABILITY=YES` enables the test target's imports:
 
@@ -178,6 +182,7 @@ PromptImage/
   Query/                       Language setup, local translation, and query embeddings
   Retrieval/                   In-memory sample index, ranking, and test-search interface
   OCR/                         Local text recognition, image tiling, and viewer state
+  Persistence/                 Protected SQLite index, versioned results, and full-text lookup
   Assets.xcassets/              Bundled app assets
 Configuration/Info.plist        Typed PhotoKit privacy configuration
 PromptImageTests/
@@ -188,6 +193,7 @@ docs/INFERENCE.md               Swift inference validation and phone benchmarkin
 docs/TRANSLATION.md             Russian query setup and translation validation
 docs/RETRIEVAL.md               Development sample transfer, search, and evaluation
 docs/OCR.md                     OCR behavior, limits, and validation
+docs/PERSISTENCE.md             Storage contracts, privacy, and validation
 tools/                         Dataset utilities and model/runtime preparation
 PrivateData/                   Local-only sample photos, labels, and indexes
 ModelArtifacts/                Local-only downloaded and converted models
@@ -204,7 +210,7 @@ As features are added, keep these responsibilities separate within the app:
 - **Persistence:** the local index, processing status, and model versions.
 - **Search:** query processing and ranking visual and OCR matches.
 
-The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today. Sample retrieval adds separate ranking, corpus loading, and screen-state coordination. Per-photo OCR separates source access, recognition, and screen state; persistent photo-library indexing and combined OCR search remain later work.
+The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today. Sample retrieval adds separate ranking, corpus loading, and screen-state coordination. Per-photo OCR separates source access, recognition, and screen state. The persistent index owns storage transactions and versioned state; foreground scheduling, library reconciliation, and combined OCR search remain later work.
 
 The evaluation utilities use Python 3.9 or later and its standard library. Run their offline integrity tests with:
 
