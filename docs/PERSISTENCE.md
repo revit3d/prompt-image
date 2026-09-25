@@ -1,6 +1,6 @@
 # Step 4.2: persistent local photo index
 
-`PhotoIndexStore` is an actor-owned SQLite store for derived photo data. It is ready for the foreground indexing coordinator in step 4.3. This step does not start scanning the photo library, save the viewer's temporary OCR results, or change the public-sample search screen. There is no new user-facing control yet.
+`PhotoIndexStore` is an actor-owned SQLite store for derived photo data. [Step 4.3](INDEXING.md) connects it to foreground indexing through **Подготовка к поиску** in the gallery. The viewer's separate OCR results remain temporary, and the public-sample search screen is unchanged.
 
 ## Stored data and contracts
 
@@ -29,7 +29,7 @@ The store uses rollback journals in DELETE mode, synchronous FULL commits, forei
 
 Schema creation and `user_version` changes are transactional. Existing databases receive SQLite quick/foreign-key checks. A future or invalid schema, malformed payload, or database error is reported without automatically deleting or rebuilding user data. Errors exposed by this layer contain safe categories/SQLite numeric codes, never SQL, OCR text, asset IDs, or file paths. The layer emits no content logs and uses no network APIs.
 
-Step 4.4 will connect photo-library changes and permission revocation to the supplied remove/clear/upsert operations. Until that coordinator is implemented, this layer must not be treated as an independent authority for which photos are currently permitted; it deliberately does not call PhotoKit.
+Step 4.3 reconciles complete permitted snapshots on library refresh, removes inaccessible records before loading models, and clears derived data after revocation. `synchronize` atomically prunes absent assets and updates snapshots/versions; never pass it an incomplete page. `retainOnly` performs permission pruning independently of model availability. `retryIncomplete` resets only failed/cloud stages, while `recoverInterruptedWork` repairs interrupted claims after the sole worker drains. Summary counts report photos: pending, cloud, and failed categories may overlap when their two stages differ. Step 4.4 can refine change handling without postponing these access safeguards. This storage layer deliberately does not call PhotoKit; future search callers must also validate current access rather than treating the database as permission authority.
 
 ## Validation
 

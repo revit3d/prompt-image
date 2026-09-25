@@ -66,6 +66,22 @@ nonisolated struct PhotoIndexRecord: Sendable, Equatable {
     let ocr: PhotoIndexStageState
 }
 
+/// Counts refer to photos, not individual stages. A photo with one failed stage
+/// and one cloud-only stage contributes to both failure and download counts;
+/// pending work may also overlap those counts while its other stage completes.
+nonisolated struct PhotoIndexSummary: Sendable, Equatable {
+    let totalCount: Int
+    let completeCount: Int
+    let embeddingCount: Int
+    let ocrCount: Int
+    let pendingCount: Int
+    let downloadRequiredCount: Int
+    let failedCount: Int
+
+    static let empty = PhotoIndexSummary(totalCount: 0, completeCount: 0,
+        embeddingCount: 0, ocrCount: 0, pendingCount: 0, downloadRequiredCount: 0, failedCount: 0)
+}
+
 nonisolated struct PhotoIndexTextMatch: Sendable, Equatable {
     let assetID: String
     let text: String

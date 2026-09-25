@@ -1,6 +1,6 @@
 # Step 4.1: recognize text in photos
 
-The photo viewer's **Распознать текст** action opens an explicit, single-photo OCR check. It recognizes Russian and English together and displays the original text. It does not translate text, index the library, save results, or change sample-search ranking. Persistent storage and resumable indexing belong to later milestone 4 steps.
+The photo viewer's **Распознать текст** action opens an explicit, single-photo OCR check. It recognizes Russian and English together and displays the original text. This viewer action does not translate text, index the library, save results, or change sample-search ranking. [Step 4.3](INDEXING.md) reuses the recognition engine in a separate gallery flow that persistently indexes photos and resumes interrupted work.
 
 ## Recognition and image handling
 
@@ -16,9 +16,9 @@ PhotoKit materializes compressed data before the byte limit can be applied, and 
 
 ## Lifetimes and privacy
 
-Recognition starts only after tapping **Начать распознавание**. The source request times out after 30 seconds. Closing the OCR screen, leaving the app, dismissing the photo viewer, or receiving a changed photo snapshot invalidates work and clears displayed text. Deleting the selected photo or removing permission closes its viewer through the existing library refresh flow. Returning to the app does not automatically restart OCR.
+The viewer's recognition starts only after tapping **Начать распознавание**. Opening this diagnostic first pauses and drains any foreground indexing work. The source request times out after 30 seconds. Closing the OCR screen, leaving the app, dismissing the photo viewer, or receiving a changed photo snapshot invalidates work and clears displayed text. Deleting the selected photo or removing permission closes its viewer through the existing library refresh flow. Returning to the app does not automatically restart the viewer's OCR.
 
-Cancellation cancels PhotoKit requests and active Vision requests. Synchronous image decoding or Vision cleanup may take time to return; the screen stays busy until submitted recognition finishes. Generation checks reject late results, and the same viewer cannot start another recognition while cancellation is still completing. Source bytes, lines, and errors containing private content are never written or logged. No clipboard write is automatic; text selection is a user action. Clearing references is not a secure-memory-erasure guarantee.
+Cancellation cancels PhotoKit requests and active Vision requests. Synchronous image decoding or Vision cleanup may take time to return; the screen stays busy until submitted recognition finishes. Generation checks reject late results, and the same viewer cannot start another recognition while cancellation is still completing. The viewer does not write source bytes, recognized lines, or errors containing private content to files or logs. The separate [indexing flow](INDEXING.md) saves recognized lines and embeddings to protected local storage. No clipboard write is automatic; text selection is a user action. Clearing references is not a secure-memory-erasure guarantee.
 
 ## Run focused behavioral tests
 
@@ -48,4 +48,4 @@ Validated on 2026-09-25 with Xcode 27.0 and the iPhone 18 Pro / iOS 27.0 simulat
 3. Start recognition, then cancel, close the screen, switch apps, or lock the phone. Confirm no late result appears; on returning, explicitly start again. Reopen the OCR screen during cancellation and confirm it waits instead of starting another request.
 4. While OCR is visible, edit/delete its photo in Photos or remove its permission/limited selection in Settings. Return and confirm stale text is gone and the viewer follows the refreshed selection.
 5. Try an iCloud-only image in airplane mode. A cached preview must not become an OCR source. It should report a required download or unavailable source. Download in Apple's Photos app, return, and explicitly retry.
-6. Repeat local-image OCR in airplane mode. Record failures and compare actual text locally; keep screenshots, extracted text, and private annotations outside Git. Use Instruments on the physical iPhone for memory/latency measurements before batch indexing.
+6. Repeat local-image OCR in airplane mode. Record failures and compare actual text locally; keep screenshots, extracted text, and private annotations outside Git. Use Instruments on the physical iPhone for memory/latency measurements before assessing sustained batch-indexing performance; follow the separate [indexing checks](INDEXING.md).

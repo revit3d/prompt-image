@@ -7,6 +7,7 @@ final class PhotoLibraryStore {
     let access: PhotoLibraryAccess
     let images: any PhotoImageProviding
     let availability: PhotoAvailabilityScan
+    let indexing: PhotoIndexingStore?
     private(set) var photos: [LibraryPhoto] = []
     private(set) var isLoading = false
     var selectedPhoto: LibraryPhoto?
@@ -22,7 +23,8 @@ final class PhotoLibraryStore {
         self.init(
             access: PhotoLibraryAccess(),
             provider: PhotoKitLibraryProvider(),
-            images: PhotoKitImageProvider()
+            images: PhotoKitImageProvider(),
+            indexing: PhotoIndexingStore()
         )
     }
 
@@ -30,12 +32,14 @@ final class PhotoLibraryStore {
         access: PhotoLibraryAccess,
         provider: any PhotoLibraryProviding,
         images: any PhotoImageProviding,
-        availability: PhotoAvailabilityScan? = nil
+        availability: PhotoAvailabilityScan? = nil,
+        indexing: PhotoIndexingStore? = nil
     ) {
         self.access = access
         self.provider = provider
         self.images = images
         self.availability = availability ?? PhotoAvailabilityScan()
+        self.indexing = indexing
         lastAuthorization = access.status
     }
 
@@ -43,9 +47,13 @@ final class PhotoLibraryStore {
         fetchTask?.cancel()
         provider.stopObserving()
         availability.pause()
+        indexing?.pause()
     }
 
     func refresh() {
+        // A PhotoKit callback or foreground transition can indicate changed
+        // permissions. Stop indexing until a fresh accessible snapshot arrives.
+        indexing?.invalidateLibrary()
         refreshAuthorization()
         guard canReadPhotos else {
             clearLibrary()
@@ -66,6 +74,12 @@ final class PhotoLibraryStore {
         fetchPhotos()
     }
 
+    func pauseIndexingForInteractiveWork() async {
+        availability.pause()
+        indexing?.pause()
+        await indexing?.waitForIdle()
+    }
+
     private var canReadPhotos: Bool {
         access.status == .authorized || access.status == .limited
     }
@@ -79,6 +93,7 @@ final class PhotoLibraryStore {
             selectedPhoto = nil
             images.cancelAll()
             availability.clear()
+            indexing?.pause()
         }
         lastAuthorization = access.status
     }
@@ -118,6 +133,7 @@ final class PhotoLibraryStore {
 
         photos = newPhotos
         availability.updatePhotos(newPhotos)
+        indexing?.updatePhotos(newPhotos)
         if let selectedPhoto {
             self.selectedPhoto = newPhotos.first { $0.id == selectedPhoto.id }
         }
@@ -138,5 +154,6 @@ final class PhotoLibraryStore {
         }
         images.cancelAll()
         availability.clear()
+        indexing?.revokeAccess()
     }
 }

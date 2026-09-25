@@ -2,7 +2,7 @@
 
 **Тест поиска** connects image embeddings, Russian-to-English query translation, text embeddings, and cosine ranking in a minimal iPhone interface. It searches the existing public evaluation sample: **400 images** and **28 development visual queries**, comprising 14 paired Russian/English scenarios. The separate **Язык поиска** screen remains available for checking translation and query encoding alone.
 
-The sample is copied into the app's data container by a developer. It is not included in the app bundle or imported into Photos. Searching this sample requires no Photos permission and does not index the user's library. Persistent indexing, PhotoKit asset mapping, resumable library processing, OCR, and combined visual/text retrieval remain later work.
+The sample is copied into the app's data container by a developer. It is not included in the app bundle or imported into Photos. Searching this sample requires no Photos permission and does not index the user's library. [Step 4.3](INDEXING.md) separately adds persistent, resumable photo-library indexing with CLIP and OCR. Opening **Тест поиска** pauses and drains that work before preparing the sample. The combined personal-library search interface remains milestone 5; this sample demo's ranking is unchanged.
 
 ## Prepare the exact frozen corpus
 

@@ -6,6 +6,7 @@ struct PhotoLibraryView: View {
     let showAccess: () -> Void
     let showQuerySetup: () -> Void
     let showRetrievalDemo: () -> Void
+    var isPreparingInteractiveWork = false
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: 2)]
 
     var body: some View {
@@ -29,7 +30,14 @@ struct PhotoLibraryView: View {
                     .padding(.horizontal, 16)
 
                     if !library.photos.isEmpty {
+                        if let indexing = library.indexing {
+                            PhotoIndexingSummaryView(store: indexing) {
+                                library.availability.pause()
+                            }
+                            .padding(.horizontal, 16)
+                        }
                         PhotoAvailabilitySummary(scan: library.availability)
+                            .disabled(library.indexing?.isBusy == true || library.indexing?.wantsToRun == true)
                             .padding(.horizontal, 16)
                     }
 
@@ -78,8 +86,14 @@ struct PhotoLibraryView: View {
                         Button("Тест поиска", systemImage: "magnifyingglass", action: showRetrievalDemo)
                         Button("Язык поиска", systemImage: "character.bubble", action: showQuerySetup)
                     } label: {
-                        Label("Поиск", systemImage: "magnifyingglass")
+                        if isPreparingInteractiveWork {
+                            ProgressView()
+                                .accessibilityLabel("Подготовка поиска")
+                        } else {
+                            Label("Поиск", systemImage: "magnifyingglass")
+                        }
                     }
+                    .disabled(isPreparingInteractiveWork)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Доступ", systemImage: "lock.shield", action: showAccess)
@@ -156,10 +170,13 @@ private struct PhotoAvailabilitySummary: View {
 struct PhotoViewer: View {
     let photo: LibraryPhoto
     let provider: any PhotoImageProviding
+    let prepareForOCR: () async -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var showsOCR = false
     @State private var ocr = PhotoOCRStore()
+    @State private var preparationTask: Task<Void, Never>?
+    @State private var isPreparingOCR = false
 
     var body: some View {
         NavigationStack {
@@ -171,15 +188,24 @@ struct PhotoViewer: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Распознать текст", systemImage: "text.viewfinder") {
-                            showsOCR = true
+                            beginOCRPresentation()
                         }
+                        .disabled(isPreparingOCR)
                         .accessibilityIdentifier("showPhotoOCR")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Закрыть", systemImage: "xmark") {
+                            cancelOCRPresentation()
                             ocr.deactivate()
                             dismiss()
                         }
+                    }
+                }
+                .overlay {
+                    if isPreparingOCR {
+                        ProgressView("Подготовка распознавания…")
+                            .padding(20)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
                     }
                 }
         }
@@ -188,13 +214,38 @@ struct PhotoViewer: View {
             PhotoOCRView(photo: photo, store: ocr)
         }
         .onChange(of: photo) { _, _ in
+            cancelOCRPresentation()
             ocr.deactivate()
             showsOCR = false
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { ocr.deactivate() }
+            if phase != .active {
+                cancelOCRPresentation()
+                ocr.deactivate()
+            }
         }
-        .onDisappear { ocr.deactivate() }
+        .onDisappear {
+            cancelOCRPresentation()
+            ocr.deactivate()
+        }
+    }
+
+    private func beginOCRPresentation() {
+        guard preparationTask == nil else { return }
+        isPreparingOCR = true
+        preparationTask = Task { @MainActor in
+            await prepareForOCR()
+            guard !Task.isCancelled else { return }
+            isPreparingOCR = false
+            preparationTask = nil
+            showsOCR = true
+        }
+    }
+
+    private func cancelOCRPresentation() {
+        preparationTask?.cancel()
+        preparationTask = nil
+        isPreparingOCR = false
     }
 }
 

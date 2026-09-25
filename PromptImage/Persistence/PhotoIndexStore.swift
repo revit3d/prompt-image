@@ -38,36 +38,117 @@ actor PhotoIndexStore {
         try Self.validateIdentifier(versions.embedding)
         try Self.validateIdentifier(versions.ocr)
         return try database.transaction {
-            if let current = try record(for: photo.id), current.photo != photo {
-                // Cascade deletion clears both payloads and FTS, while the new generation
-                // rejects a late result even if the old and new metadata later match again.
-                try database.execute("DELETE FROM photos WHERE asset_id = ?", [.text(photo.id)])
+            try upsertInTransaction(photo, versions: versions)
+        }
+    }
+
+    /// Reconcile the complete, currently permitted library snapshot in one transaction.
+    /// Never pass a page or a fetch still in progress: absent assets and their derived
+    /// data are removed. Duplicate identifiers are rejected before any mutation.
+    func synchronize(_ photos: [LibraryPhoto], versions: PhotoIndexVersions) throws {
+        try Self.validateIdentifier(versions.embedding)
+        try Self.validateIdentifier(versions.ocr)
+        var permittedIDs = Set<String>()
+        for photo in photos {
+            try Task.checkCancellation()
+            try Self.validate(photo)
+            guard permittedIDs.insert(photo.id).inserted else { throw PhotoIndexError.invalidInput }
+        }
+        try database.transaction {
+            try retainOnlyInTransaction(assetIDs: permittedIDs)
+            for photo in photos { _ = try upsertInTransaction(photo, versions: versions) }
+        }
+    }
+
+    /// Remove derived data outside the permitted snapshot even if model resources
+    /// are unavailable. An empty set clears the index; original photos are untouched.
+    func retainOnly(assetIDs: Set<String>) throws {
+        for id in assetIDs { try Self.validateIdentifier(id) }
+        try database.transaction { try retainOnlyInTransaction(assetIDs: assetIDs) }
+    }
+
+    /// Explicit retry leaves successful and currently processing stages intact.
+    func retryIncomplete() throws {
+        try database.transaction {
+            try database.execute("""
+                UPDATE stages SET status = 'pending', failure = NULL
+                WHERE status IN ('failed', 'requiresDownload')
+                """)
+        }
+    }
+
+    /// Call only after the preceding worker has drained. This also repairs a claim
+    /// whose cancellation could not be saved while protected data was unavailable.
+    /// Old tickets become stale; completed results are preserved.
+    func recoverInterruptedWork() throws {
+        try database.transaction {
+            try database.execute("UPDATE stages SET status = 'pending', attempt = NULL WHERE status = 'processing'")
+        }
+    }
+
+    func summary() throws -> PhotoIndexSummary {
+        guard let row = try database.query("""
+            SELECT COUNT(*),
+                COALESCE(SUM(e.status = 'complete' AND o.status = 'complete'), 0),
+                COALESCE(SUM(e.status = 'complete'), 0),
+                COALESCE(SUM(o.status = 'complete'), 0),
+                COALESCE(SUM(e.status IN ('pending', 'processing') OR o.status IN ('pending', 'processing')), 0),
+                COALESCE(SUM(e.status = 'requiresDownload' OR o.status = 'requiresDownload'), 0),
+                COALESCE(SUM(e.status = 'failed' OR o.status = 'failed'), 0)
+            FROM photos p
+            JOIN stages e ON e.photo_id = p.photo_id AND e.kind = 'embedding'
+            JOIN stages o ON o.photo_id = p.photo_id AND o.kind = 'ocr'
+            """).first else { throw PhotoIndexError.invalidStoredData }
+        let counts = try row.map { Int(try Self.integer($0)) }
+        return PhotoIndexSummary(totalCount: counts[0], completeCount: counts[1],
+            embeddingCount: counts[2], ocrCount: counts[3], pendingCount: counts[4],
+            downloadRequiredCount: counts[5], failedCount: counts[6])
+    }
+
+    /// Caller owns the transaction and has validated the snapshot and versions.
+    private func upsertInTransaction(_ photo: LibraryPhoto, versions: PhotoIndexVersions) throws -> PhotoIndexRecord {
+        let current = try record(for: photo.id)
+        if let current, current.photo == photo,
+           current.embedding.version == versions.embedding, current.ocr.version == versions.ocr {
+            return current
+        }
+        if let current, current.photo != photo {
+            // Cascade deletion clears both payloads and FTS, while the new generation
+            // rejects a late result even if the old and new metadata later match again.
+            try database.execute("DELETE FROM photos WHERE asset_id = ?", [.text(photo.id)])
+        }
+        if current == nil || current?.photo != photo {
+            try database.execute("""
+                INSERT INTO photos(asset_id, creation_date, modification_date, width, height, generation)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, [.text(photo.id), Self.dateValue(photo.creationDate), Self.dateValue(photo.modificationDate),
+                      .integer(Int64(photo.pixelWidth)), .integer(Int64(photo.pixelHeight)), .text(UUID().uuidString)])
+            let id = try photoID(photo.id)
+            for (stage, version) in [(PhotoIndexStage.embedding, versions.embedding), (.ocr, versions.ocr)] {
+                try database.execute("INSERT INTO stages(photo_id, kind, version, status) VALUES (?, ?, ?, 'pending')",
+                                     [.integer(id), .text(stage.rawValue), .text(version)])
             }
-            if try record(for: photo.id) == nil {
-                try database.execute("""
-                    INSERT INTO photos(asset_id, creation_date, modification_date, width, height, generation)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """, [.text(photo.id), Self.dateValue(photo.creationDate), Self.dateValue(photo.modificationDate),
-                          .integer(Int64(photo.pixelWidth)), .integer(Int64(photo.pixelHeight)), .text(UUID().uuidString)])
-                let id = try photoID(photo.id)
-                for (stage, version) in [(PhotoIndexStage.embedding, versions.embedding), (.ocr, versions.ocr)] {
-                    try database.execute("INSERT INTO stages(photo_id, kind, version, status) VALUES (?, ?, ?, 'pending')",
-                                         [.integer(id), .text(stage.rawValue), .text(version)])
-                }
-            } else {
-                let id = try photoID(photo.id)
-                for (stage, version) in [(PhotoIndexStage.embedding, versions.embedding), (.ocr, versions.ocr)] {
-                    if try stageState(id, stage: stage).version != version {
-                        try database.execute("""
-                            UPDATE stages SET version = ?, status = 'pending', attempt = NULL, payload = NULL, failure = NULL
-                            WHERE photo_id = ? AND kind = ?
-                            """, [.text(version), .integer(id), .text(stage.rawValue)])
-                        if stage == .ocr { try deleteText(id) }
-                    }
+        } else if let current {
+            let id = try photoID(photo.id)
+            for (stage, version) in [(PhotoIndexStage.embedding, versions.embedding), (.ocr, versions.ocr)] {
+                let state = stage == .embedding ? current.embedding : current.ocr
+                if state.version != version {
+                    try database.execute("""
+                        UPDATE stages SET version = ?, status = 'pending', attempt = NULL, payload = NULL, failure = NULL
+                        WHERE photo_id = ? AND kind = ?
+                        """, [.text(version), .integer(id), .text(stage.rawValue)])
+                    if stage == .ocr { try deleteText(id) }
                 }
             }
-            guard let record = try record(for: photo.id) else { throw PhotoIndexError.invalidStoredData }
-            return record
+        }
+        guard let record = try record(for: photo.id) else { throw PhotoIndexError.invalidStoredData }
+        return record
+    }
+
+    private func retainOnlyInTransaction(assetIDs: Set<String>) throws {
+        let existingIDs = try database.query("SELECT asset_id FROM photos").map { try Self.text($0[0]) }
+        for id in existingIDs where !assetIDs.contains(id) {
+            try database.execute("DELETE FROM photos WHERE asset_id = ?", [.text(id)])
         }
     }
 

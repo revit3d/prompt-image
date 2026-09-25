@@ -10,6 +10,8 @@ struct ContentView: View {
     @State private var showsAccess = false
     @State private var showsQuerySetup = false
     @State private var showsRetrievalDemo = false
+    @State private var interactivePresentationTask: Task<Void, Never>?
+    @State private var isPreparingInteractiveWork = false
 
     private var photoAccess: PhotoLibraryAccess { library.access }
 
@@ -19,14 +21,16 @@ struct ContentView: View {
         Group {
             if photoAccess.status == .authorized || photoAccess.status == .limited {
                 PhotoLibraryView(library: library, showAccess: { showsAccess = true },
-                                 showQuerySetup: { showsQuerySetup = true },
-                                 showRetrievalDemo: { showsRetrievalDemo = true })
+                                 showQuerySetup: { presentInteractive(.querySetup) },
+                                 showRetrievalDemo: { presentInteractive(.retrievalDemo) },
+                                 isPreparingInteractiveWork: isPreparingInteractiveWork)
             } else {
                 permissionScreen
             }
         }
         .task {
             library.availability.setActive(scenePhase == .active)
+            library.indexing?.setActive(scenePhase == .active)
             library.refresh()
         }
         .onChange(of: photoAccess.status) { _, status in
@@ -38,11 +42,16 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 library.refresh()
+            } else {
+                cancelInteractivePresentation()
             }
             library.availability.setActive(phase == .active)
+            library.indexing?.setActive(phase == .active)
         }
         .fullScreenCover(item: $library.selectedPhoto) { photo in
-            PhotoViewer(photo: library.selectedPhoto ?? photo, provider: library.images)
+            PhotoViewer(photo: library.selectedPhoto ?? photo, provider: library.images) {
+                await library.pauseIndexingForInteractiveWork()
+            }
         }
         .sheet(isPresented: $showsQuerySetup) { QuerySetupView() }
         .sheet(isPresented: $showsRetrievalDemo) { RetrievalDemoView() }
@@ -93,10 +102,15 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
 
                 if !showsAccess {
-                    Button("Тест поиска", systemImage: "magnifyingglass") { showsRetrievalDemo = true }
+                    Button("Тест поиска", systemImage: "magnifyingglass") { presentInteractive(.retrievalDemo) }
                         .buttonStyle(.borderedProminent)
-                    Button("Язык поиска", systemImage: "character.bubble") { showsQuerySetup = true }
+                        .disabled(isPreparingInteractiveWork)
+                    Button("Язык поиска", systemImage: "character.bubble") { presentInteractive(.querySetup) }
                         .buttonStyle(.bordered)
+                        .disabled(isPreparingInteractiveWork)
+                    if isPreparingInteractiveWork {
+                        ProgressView("Подготовка…")
+                    }
                 }
             }
             .frame(maxWidth: 520, alignment: .leading)
@@ -165,6 +179,32 @@ struct ContentView: View {
             .font(.headline)
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("photoAccessStatus")
+    }
+
+    private enum InteractiveDestination {
+        case querySetup
+        case retrievalDemo
+    }
+
+    private func presentInteractive(_ destination: InteractiveDestination) {
+        guard interactivePresentationTask == nil else { return }
+        isPreparingInteractiveWork = true
+        interactivePresentationTask = Task { @MainActor in
+            await library.pauseIndexingForInteractiveWork()
+            guard !Task.isCancelled else { return }
+            isPreparingInteractiveWork = false
+            interactivePresentationTask = nil
+            switch destination {
+            case .querySetup: showsQuerySetup = true
+            case .retrievalDemo: showsRetrievalDemo = true
+            }
+        }
+    }
+
+    private func cancelInteractivePresentation() {
+        interactivePresentationTask?.cancel()
+        interactivePresentationTask = nil
+        isPreparingInteractiveWork = false
     }
 
     private func settingsButton(_ title: String) -> some View {
