@@ -10,10 +10,11 @@ nonisolated enum CLIPImagePreprocessingError: Error, Equatable {
     case invalidOrientation
 }
 
-/// ImageIO decodes the first still image; channel values are interpreted as RGB without
-/// applying an ICC color transform, matching Pillow's `convert("RGB")` convention.
-/// Supports 8-bit RGB and grayscale, including alpha. RAW/HDR/CMYK conversion is not
-/// implicit: unsupported decoded layouts fail rather than changing the model's input.
+/// ImageIO decodes the first still image without applying an ICC color transform,
+/// matching Pillow's `convert("RGB")` convention.
+/// Supports 8-bit RGB and grayscale, including alpha, and CMYK. CMYK stays in its
+/// original four channels through resizing, then uses Pillow's RGB conversion.
+/// RAW/HDR and unsupported decoded layouts fail rather than changing the model's input.
 nonisolated struct CLIPImagePreprocessor {
     static let imageSize = 224
     static let maximumPixelCount = 50_000_000
@@ -73,7 +74,7 @@ nonisolated struct CLIPImagePreprocessor {
         let geometry = try Self.resizeGeometry(width: orientedWidth, height: orientedHeight)
         let needsResize = geometry.width != orientedWidth || geometry.height != orientedHeight
         let alphaResize = needsResize && decoded.alphaIndex != nil
-        let channels = alphaResize ? 4 : 3
+        let channels = alphaResize || decoded.cmykInverted != nil ? 4 : 3
 
         // Generate only the 224 columns/rows retained by the center crop. The samples and
         // rounding are identical to a full resize, without a panorama-sized output buffer.
@@ -102,7 +103,10 @@ nonisolated struct CLIPImagePreprocessor {
                     }
                     for channel in 0..<channels {
                         var value: Int
-                        if channel == 3 {
+                        if let inverted = decoded.cmykInverted {
+                            value = Int(sourceBytes[offset + decoded.colorIndices[channel]])
+                            if inverted[channel] { value = 255 - value }
+                        } else if channel == 3 {
                             value = alpha
                         } else {
                             value = Int(sourceBytes[offset + decoded.colorIndices[channel]])
@@ -136,7 +140,12 @@ nonisolated struct CLIPImagePreprocessor {
                 let alpha = alphaResize ? Int(Self.roundedByte(sums[3])) : 255
                 for channel in 0..<3 {
                     var value = Int(Self.roundedByte(sums[channel]))
-                    if alphaResize {
+                    if decoded.cmykInverted != nil {
+                        // Pillow 11.3 Convert.c cmyk2rgb: subtract the rounded CMY
+                        // contribution from 255-K, after resizing all four channels.
+                        let nonBlack = 255 - Int(Self.roundedByte(sums[3]))
+                        value = nonBlack - (value * nonBlack + 127) / 255
+                    } else if alphaResize {
                         // Pillow preserves the filtered channels at zero alpha. Bicubic
                         // ringing can leave a nonzero channel even when alpha rounds to 0.
                         value = alpha == 0 ? value : min(255, 255 * value / alpha)
@@ -181,6 +190,8 @@ nonisolated struct CLIPImagePreprocessor {
         let colorIndices: [Int]
         let alphaIndex: Int?
         let premultiplied: Bool
+        /// Per-channel decode inversion; Adobe CMYK JPEGs commonly store inverted values.
+        let cmykInverted: [Bool]?
 
         init(png: CLIPPNGDecoder.Image) {
             data = png.pixels as CFData
@@ -189,15 +200,34 @@ nonisolated struct CLIPImagePreprocessor {
             colorIndices = png.channels == 4 ? [0, 1, 2] : [0, 0, 0]
             alphaIndex = png.channels - 1
             premultiplied = false
+            cmykInverted = nil
         }
 
         init(image: CGImage) throws {
             try validateDimensions(width: image.width, height: image.height)
             guard image.bitsPerComponent == 8, !image.bitmapInfo.contains(.floatComponents),
-                  let model = image.colorSpace?.model, model == .rgb || model == .monochrome else {
+                  let model = image.colorSpace?.model,
+                  model == .rgb || model == .monochrome || model == .cmyk else {
                 throw CLIPImagePreprocessingError.unsupportedPixelFormat
             }
-            let colorCount = model == .rgb ? 3 : 1
+            let isCMYK = model == .cmyk
+            let colorCount = isCMYK ? 4 : (model == .rgb ? 3 : 1)
+            if isCMYK {
+                guard image.alphaInfo == .none else { throw CLIPImagePreprocessingError.unsupportedPixelFormat }
+                if let decode = image.decode {
+                    cmykInverted = try (0..<4).map { channel in
+                        let lower = decode[channel * 2]
+                        let upper = decode[channel * 2 + 1]
+                        if lower == 0 && upper == 1 { return false }
+                        if lower == 1 && upper == 0 { return true }
+                        throw CLIPImagePreprocessingError.unsupportedPixelFormat
+                    }
+                } else {
+                    cmykInverted = Array(repeating: false, count: 4)
+                }
+            } else {
+                cmykInverted = nil
+            }
             let pixelBytes = image.bitsPerPixel / 8
             let componentStart: Int
             let alpha: Int?
@@ -225,7 +255,7 @@ nonisolated struct CLIPImagePreprocessor {
             let reversed = (pixelBytes == 4 && order == .byteOrder32Little)
                 || (pixelBytes == 2 && order == .byteOrder16Little)
             func index(_ value: Int) -> Int { reversed ? pixelBytes - 1 - value : value }
-            colorIndices = (0..<3).map { index(componentStart + (colorCount == 1 ? 0 : $0)) }
+            colorIndices = (0..<(isCMYK ? 4 : 3)).map { index(componentStart + (colorCount == 1 ? 0 : $0)) }
             alphaIndex = alpha.map(index)
             premultiplied = image.alphaInfo == .premultipliedFirst || image.alphaInfo == .premultipliedLast
             guard let bytes = image.dataProvider?.data,

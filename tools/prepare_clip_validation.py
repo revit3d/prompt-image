@@ -79,6 +79,13 @@ def verify_bundle(directory, expected_recipe=None):
         require_file(case.get("tensor_file"), 3 * 224 * 224 * 4)
         if case.get("exif_orientation") not in range(1, 9):
             raise ValueError("Invalid fixture orientation")
+        if "decoded_rgb_file" in case:
+            size = case.get("raw_size")
+            if (not isinstance(size, list) or len(size) != 2
+                    or any(type(value) is not int or not 1 <= value <= 32768 for value in size)
+                    or case.get("mode") != "RGB"):
+                raise ValueError("Invalid decoded RGB fixture dimensions or mode")
+            require_file(case["decoded_rgb_file"], size[0] * size[1] * 3)
     for case in texts:
         tokens = case.get("tokens", [])
         if (len(tokens) != 77 or any(type(token) is not int or not 0 <= token <= 49407 for token in tokens)
@@ -133,6 +140,16 @@ def make_images(directory):
     path = directory / "grayscale.png"
     Image.fromarray(((x * 3 + y * 7) % 256).astype(np.uint8)).save(path)
     cases.append(("grayscale", path, 1))
+    # CMYK must be resized/cropped before conversion to RGB. Independent high-frequency
+    # C/M/Y/K patterns distinguish that ordering and exercise Adobe JPEG inversion.
+    for name, width, height in (("cmyk-resize", 319, 243), ("cmyk-no-resize", 320, 224)):
+        y, x = np.indices((height, width))
+        cmyk = np.stack(((x * 5 + y * 3) % 256, (x * 7 + y * 11) % 256,
+                         ((x // 13 + y // 19) % 2) * 255,
+                         (x * 13 + y * 17) % 256), axis=2).astype(np.uint8)
+        path = directory / f"{name}.jpg"
+        Image.frombytes("CMYK", (width, height), cmyk.tobytes()).save(path, quality=95, subsampling=0)
+        cases.append((name, path, 1))
     # The same compressed RGB content with each EXIF tag isolates orientation handling.
     image = Image.fromarray(rgb(321, 241))
     for orientation in range(1, 9):
@@ -196,11 +213,19 @@ def generate(source, checkpoint, output, versions, lock, photos=()):
                 tensor = preprocess(oriented).unsqueeze(0)
                 tensor_name = f"references/{name}-tensor.bin"
                 write_floats(output / tensor_name, tensor.numpy())
+                decoder_reference = {}
+                if name == "orientation-1":
+                    # Isolate JPEG decoding from resize/crop/normalization. The existing
+                    # 4:4:4 JPEG has no chroma-subsampling geometry or EXIF rotation.
+                    decoded_name = f"references/{name}-decoded-rgb.bin"
+                    (output / decoded_name).write_bytes(image.convert("RGB").tobytes())
+                    decoder_reference["decoded_rgb_file"] = decoded_name
                 images.append({
                     "name": name, "image_file": path.relative_to(output).as_posix(),
                     "mode": image.mode, "exif_orientation": orientation,
                     "raw_size": list(image.size), "oriented_size": list(oriented.size),
                     "tensor_file": tensor_name,
+                    **decoder_reference,
                     **embeddings(name, tensor, model.encode_image),
                 })
             print(f"Reference image: {name}", flush=True)

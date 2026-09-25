@@ -1,6 +1,7 @@
 import CoreML
 import Darwin
 import Foundation
+import ImageIO
 import Testing
 @testable import PromptImage
 
@@ -15,6 +16,8 @@ nonisolated private struct ValidationFixtures: Decodable {
         let image_file: String
         let tensor_file: String
         let embedding_file: String
+        let raw_size: [Int]
+        let decoded_rgb_file: String?
     }
 
     struct TextCase: Decodable {
@@ -50,6 +53,8 @@ struct CLIPInferenceTests {
     @Test
     func preprocessingAndInferenceMatchIndependentPythonReferences() async throws {
         let (directory, cases) = try fixtures()
+        #expect(Set(cases.images.map(\.name)).isSuperset(of: ["cmyk-resize", "cmyk-no-resize"]),
+                "Validation fixtures must include CMYK resize-order and decode-inversion coverage")
         let resources = try CLIPModelResources()
         let tokenizer = try CLIPTokenizer(contentsOf: resources.tokenizerURL)
         let engine = CLIPEmbeddingEngine(resources: resources, computeUnits: .cpuOnly)
@@ -64,16 +69,36 @@ struct CLIPInferenceTests {
             let differences = expected.enumerated().map { abs($0.element - tensor[$0.offset].floatValue) }
             let meanError = differences.reduce(0, +) / Float(differences.count)
             let maxError = differences.max() ?? 0
+            let byteScales = [0.26862954, 0.26130258, 0.27577711].map { $0 * 255 }
+            var byteErrorTotal = 0.0
+            for (index, difference) in differences.enumerated() {
+                byteErrorTotal += Double(difference) * byteScales[index / (224 * 224)]
+            }
+            let meanByteError = byteErrorTotal / Double(differences.count)
             let actual = try await engine.imageEmbedding(data: data)
             let reference = try CLIPEmbedding(
                 rawValues: floats(directory.appendingPathComponent(item.embedding_file)),
                 modelID: resources.manifest.modelID
             )
             let cosine = try actual.cosineSimilarity(to: reference)
-            print("CLIP_IMAGE_PARITY \(item.name) mean=\(meanError) max=\(maxError) cosine=\(cosine)")
+            print("CLIP_IMAGE_PARITY \(item.name) mean=\(meanError) max=\(maxError) mean_byte=\(meanByteError) cosine=\(cosine)")
             let isJPEG = ["jpg", "jpeg"].contains(URL(fileURLWithPath: item.image_file).pathExtension.lowercased())
             // ImageIO and Pillow use different JPEG decoders; PNG should match exactly.
+            #if targetEnvironment(simulator)
             #expect(meanError <= (isJPEG ? 0.004 : 0.00001), "\(item.name): preprocessing mean error")
+            #else
+            let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+            let sourceColorModel = properties?[kCGImagePropertyColorModel] as? String
+            if isJPEG && sourceColorModel == kCGImagePropertyColorModelRGB as String {
+                // Physical ImageIO's RGB JPEG decoding differs by about half a byte
+                // on the fixed 4:4:4 fixture. Bound this in 8-bit channel units, while
+                // retaining maximum-error, embedding, and similarity-drift checks.
+                #expect(meanByteError <= 1, "\(item.name): mean error must stay within one RGB code value")
+            } else {
+                #expect(meanError <= (isJPEG ? 0.004 : 0.00001), "\(item.name): preprocessing mean error")
+            }
+            #endif
             #expect(maxError <= (isJPEG ? 0.06 : 0.00001), "\(item.name): preprocessing maximum error")
             #expect(cosine >= 0.999, "\(item.name): image embedding agreement")
             imagePairs.append((actual, reference))
@@ -98,6 +123,55 @@ struct CLIPInferenceTests {
         print("CLIP_SIMILARITY_DRIFT \(maximumDrift)")
         #expect(maximumDrift <= 0.01)
         await engine.unload()
+    }
+
+    @Test
+    func imageIODecodedRGBStaysWithinOneByteOfPillow() throws {
+        let (directory, cases) = try fixtures()
+        let item = try #require(cases.images.first { $0.name == "orientation-1" })
+        let referenceFile = try #require(item.decoded_rgb_file)
+        let expected = try Data(contentsOf: directory.appendingPathComponent(referenceFile))
+        let encoded = try Data(contentsOf: directory.appendingPathComponent(item.image_file))
+        let source = try #require(CGImageSourceCreateWithData(encoded as CFData, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        try #require(image.bitsPerComponent == 8 && image.colorSpace?.model == .rgb)
+        try #require(item.raw_size == [image.width, image.height])
+        try #require(expected.count == image.width * image.height * 3)
+        let bytes = try #require(image.dataProvider?.data) as Data
+        let pixelBytes = image.bitsPerPixel / 8
+        let start: Int
+        switch image.alphaInfo {
+        case .none:
+            try #require(pixelBytes == 3)
+            start = 0
+        case .noneSkipLast, .last, .premultipliedLast:
+            try #require(pixelBytes == 4)
+            start = 0
+        case .noneSkipFirst, .first, .premultipliedFirst:
+            try #require(pixelBytes == 4)
+            start = 1
+        default:
+            throw CLIPImagePreprocessingError.unsupportedPixelFormat
+        }
+        let reversed = pixelBytes == 4 && image.bitmapInfo.intersection(.byteOrderMask) == .byteOrder32Little
+        var totals = [Double](repeating: 0, count: 3)
+        var maxima = [Int](repeating: 0, count: 3)
+        for y in 0..<image.height {
+            for x in 0..<image.width {
+                for channel in 0..<3 {
+                    let storageIndex = reversed ? pixelBytes - 1 - start - channel : start + channel
+                    let actual = Int(bytes[y * image.bytesPerRow + x * pixelBytes + storageIndex])
+                    let reference = Int(expected[(y * image.width + x) * 3 + channel])
+                    let difference = abs(actual - reference)
+                    totals[channel] += Double(difference)
+                    maxima[channel] = max(maxima[channel], difference)
+                }
+            }
+        }
+        let means = totals.map { $0 / Double(image.width * image.height) }
+        let mean = means.reduce(0, +) / 3
+        print("CLIP_JPEG_DECODE_PARITY mean_byte=\(mean) channel_means=\(means) channel_maxima=\(maxima)")
+        #expect(mean <= 1, "Native RGB JPEG decode must average at most one 8-bit code value from Pillow")
     }
 
     @Test

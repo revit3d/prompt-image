@@ -79,6 +79,24 @@ struct CLIPImagePreprocessorTests {
         }
     }
 
+    @Test(arguments: ["public.jpeg", "public.tiff"])
+    func convertsEightBitCMYKWithPillowRounding(format: String) throws {
+        let data = try encodedImage(width: 224, height: 224, cmyk: true, format: format as CFString) {
+            _, _ in [64, 128, 192, 80]
+        }
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        let decoded = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(decoded.colorSpace?.model == .cmyk)
+        let result = try CLIPImagePreprocessor().prepare(data: data)
+        // Pillow converts C/M/Y/K=(64,128,192,80) to RGB=(131,87,43).
+        for channel in 0..<3 {
+            let expected = normalized([131, 87, 43][channel], channel: channel)
+            let tolerance: Float = format == "public.jpeg"
+                ? abs(normalized(2, channel: channel) - normalized(0, channel: channel)) : 0.000_001
+            #expect(abs(value(result, channel: channel, x: 111, y: 87) - expected) <= tolerance)
+        }
+    }
+
     @Test(.enabled(if: (CGImageDestinationCopyTypeIdentifiers() as? [String])?.contains("public.heic") == true,
                    "The current ImageIO runtime must provide an HEIC encoder"))
     func acceptsEightBitHEICFromTheSystemEncoder() throws {
@@ -289,17 +307,18 @@ struct CLIPImagePreprocessorTests {
         return (Data(encoded), Data(pixels))
     }
 
-    private func encodedImage(width: Int, height: Int, alpha: Bool = false, grayscale: Bool = false,
+    private func encodedImage(width: Int, height: Int, alpha: Bool = false, grayscale: Bool = false, cmyk: Bool = false,
                      format: CFString = "public.png" as CFString,
                      orientation: CGImagePropertyOrientation = .up,
                      pixel: (Int, Int) -> [UInt8]) throws -> Data {
-        let channels = (grayscale ? 1 : 3) + (alpha ? 1 : 0)
+        let channels = (cmyk ? 4 : (grayscale ? 1 : 3)) + (alpha ? 1 : 0)
         var pixels: [UInt8] = []
         pixels.reserveCapacity(width * height * channels)
         for y in 0..<height {
             for x in 0..<width { pixels.append(contentsOf: pixel(x, y)) }
         }
-        let space = grayscale ? CGColorSpaceCreateDeviceGray() : CGColorSpaceCreateDeviceRGB()
+        let space = cmyk ? CGColorSpaceCreateDeviceCMYK()
+            : (grayscale ? CGColorSpaceCreateDeviceGray() : CGColorSpaceCreateDeviceRGB())
         let provider = try #require(CGDataProvider(data: Data(pixels) as CFData))
         let image = try #require(CGImage(width: width, height: height, bitsPerComponent: 8,
                                         bitsPerPixel: channels * 8, bytesPerRow: width * channels,
