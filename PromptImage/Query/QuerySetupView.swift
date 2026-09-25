@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A small query verification surface; photo retrieval is introduced in step 3.4.
+/// A query verification surface alongside the separate retrieval demonstration.
 struct QuerySetupView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -63,7 +63,7 @@ struct QuerySetupView: View {
                 } header: {
                     Text("Проверка описания")
                 } footer: {
-                    Text("Пока можно проверить язык и перевод описания. Поиск фотографий появится на следующем шаге прототипа. Для коротких или смешанных описаний выберите язык вручную.")
+                    Text("Здесь можно проверить язык и перевод описания. Для поиска в тестовой коллекции откройте «Тест поиска». Для коротких или смешанных описаний выберите язык вручную.")
                 }
             }
             .navigationTitle("Язык поиска")

@@ -2,7 +2,7 @@
 
 An iOS prototype for searching a personal photo library with natural-language descriptions. The first release is intended for Russia, with a Russian interface and Russian and English search.
 
-The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Steps 3.1–3.2 add repeatable CLIP preparation, preprocessing, and local embeddings with independent Python-reference tests. Step 3.3 adds a **Язык поиска** screen and bundled Russian-to-English translation before query encoding. The gallery does not invoke image inference yet; indexing, OCR, and retrieval are future work.
+The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Steps 3.1–3.2 add repeatable CLIP preparation, preprocessing, and local embeddings with independent Python-reference tests. Step 3.3 adds a **Язык поиска** screen and bundled Russian-to-English translation before query encoding. Step 3.4 connects these models in **Тест поиска**, a minimal interface that searches a separately copied public sample using an in-memory index. Indexing the user's Photos library, persistent storage, and OCR remain future work.
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
@@ -86,6 +86,8 @@ The model tests verify resources and tensor interfaces, exact token IDs, orienta
 
 Query tests cover language routing, English bypass, translation failure and missing-model states, cancellation, and stale results. Simulator tests also run the real bundled translation model against independent Python outputs. The [physical-device benchmark](docs/TRANSLATION.md#validate-and-try-the-app) checks accelerated inference and records timing/memory; compilation alone does not establish those results.
 
+Retrieval tests cover cosine ranking, model compatibility, deterministic ties, corpus integrity, cancellation, and screen-state lifetimes. A separate [development retrieval evaluation](docs/RETRIEVAL.md#run-the-development-evaluation) runs the real models over the manually transferred sample. It is enabled only when the sample exists in the app's data container; a skipped test is not retrieval validation.
+
 Run the behavioral tests on an installed simulator using Release optimization for the large image fixtures. `ENABLE_TESTABILITY=YES` enables the test target's imports:
 
 ```sh
@@ -96,9 +98,22 @@ Use `xcrun simctl list devices available` to choose another installed destinatio
 
 ## Verify Russian query setup
 
-Open **Язык поиска** inside the app, from the gallery toolbar or the initial permission screen. Translation is ready from the bundled model without a separate setup/download. Enter a Russian description, then an English one, and use **Проверить описание** to run local query encoding. The screen displays the English processing text; photo results are not implemented yet. Short or mixed-language descriptions can use an explicit language choice.
+Open **Язык поиска** inside the app, from the gallery's **Поиск** menu or the initial permission screen. Translation is ready from the bundled model without a separate setup/download. Enter a Russian description, then an English one, and use **Проверить описание** to run local query encoding. This diagnostic screen displays the English processing text. Short or mixed-language descriptions can use an explicit language choice.
 
 See [TRANSLATION.md](docs/TRANSLATION.md) for offline checks, tests under another system language/region, and comparison against manually written English descriptions. Queries never download models or fall back to a server. No Apple Translation session or regional setting is involved.
+
+## Try semantic search on the development sample
+
+Prepare and verify the exact frozen public corpus:
+
+```sh
+python3 tools/prepare_retrieval_demo.py prepare
+python3 tools/prepare_retrieval_demo.py verify
+```
+
+Follow [RETRIEVAL.md](docs/RETRIEVAL.md) to copy `PrivateData/RetrievalDemo/` into the installed app's data container while the app is closed. Open **Тест поиска**, tap **Подготовить 400 изображений**, enter a Russian/English description, and tap **Найти изображения**. The screen shows the ten closest sample images; tapping one opens a larger view. It is available before granting Photos permission because this development sample is separate from the photo library.
+
+The demo uses an in-memory index, prepared again after reopening its screen. The copied images are outside the app bundle and never imported into Photos. The guide includes the isolated device evaluation and scoring commands for 28 development visual queries; held-out and OCR evaluation remain separate.
 
 ## Verify photo permissions on iPhone
 
@@ -153,6 +168,7 @@ PromptImage/
   PhotoLibrary/                Authorization, gallery, image requests, and availability checks
   Models/                      CLIP resources, preprocessing, tokenization, and embeddings
   Query/                       Language setup, local translation, and query embeddings
+  Retrieval/                   In-memory sample index, ranking, and test-search interface
   Assets.xcassets/              Bundled app assets
 Configuration/Info.plist        Typed PhotoKit privacy configuration
 PromptImageTests/
@@ -161,6 +177,7 @@ docs/EVALUATION.md              Dataset preparation and evaluation protocol
 docs/MODELS.md                  Pinned CLIP preparation and tensor contracts
 docs/INFERENCE.md               Swift inference validation and phone benchmarking
 docs/TRANSLATION.md             Russian query setup and translation validation
+docs/RETRIEVAL.md               Development sample transfer, search, and evaluation
 tools/                         Dataset utilities and model/runtime preparation
 PrivateData/                   Local-only sample photos, labels, and indexes
 ModelArtifacts/                Local-only downloaded and converted models
@@ -177,7 +194,7 @@ As features are added, keep these responsibilities separate within the app:
 - **Persistence:** the local index, processing status, and model versions.
 - **Search:** query processing and ranking visual and OCR matches.
 
-The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today; indexing, persistence, and search are not implemented yet.
+The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today. Sample retrieval adds separate ranking, corpus loading, and screen-state coordination; persistent photo-library indexing and combined OCR search remain later work.
 
 The evaluation utilities use Python 3.9 or later and its standard library. Run their offline integrity tests with:
 
@@ -191,7 +208,7 @@ Use a focused `codex/` branch, make small commits with simple messages after eac
 
 ## Prototype privacy and data handling
 
-The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app browses permitted photos and checks local source availability without uploading, downloading from iCloud, or modifying them; indexing and search are not implemented yet. Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery, viewer, and availability results and cancels pending requests.
+The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app browses permitted photos and checks local source availability without uploading, downloading from iCloud, or modifying them. **Тест поиска** searches a separately copied public sample with local models; personal-library indexing and OCR are not implemented yet. Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery, viewer, and availability results and cancels pending requests.
 
 - Keep personal photos, screenshots, evaluation queries and labels, and generated indexes in `PrivateData/` or outside the repository.
 - Keep downloaded weights and converted models in `ModelArtifacts/`. Step 3.1 provides pinned versions, license records, checksums, and [repeatable preparation instructions](docs/MODELS.md). Model preparation never reads private evaluation photos or the photo library.

@@ -2,7 +2,7 @@
 
 The app bundles a separate translation model, like its CLIP models. Russian descriptions are translated locally into English before CLIP encoding; English descriptions bypass translation. No Apple Translation API, language-pack download, account, or server is involved. The feature compiles for the project's existing iOS 17 deployment target and does not require Apple Intelligence or Russian regional settings.
 
-`QueryEmbeddingPipeline` returns the unchanged original query (for future OCR search), the English processing text, source language, and normalized CLIP embedding. The **Язык поиска** screen in the app lets you test this pipeline. It does not rank photos yet; retrieval is step 3.4.
+`QueryEmbeddingPipeline` returns the unchanged original query (for future OCR search), the English processing text, source language, and normalized CLIP embedding. The **Язык поиска** screen in the app lets you test this pipeline alone. The separate [step 3.4 **Тест поиска** interface](RETRIEVAL.md) uses the same pipeline to rank a copied public image sample.
 
 ## Models and provenance
 
@@ -88,6 +88,6 @@ The ten initial descriptions produce identical token sequences in upstream PyTor
 
 On the iPhone 17 Pro, the bundled `.all` compute path matched all ten reference translations. First-call translation took **3.44 seconds**, including lazy loading; warm translations across the ten phrases had a **32.1 ms median**, ranging from **19.9 to 43.7 ms**. The benchmark's sampled whole-process peak RSS was approximately **681 MiB**, including translation and CLIP text inference. Sampling is every 10 ms, so it may miss transient peaks; these are observations on one device, not guarantees for older phones or long-running indexing.
 
-The comparison identifies real translation limitations: `чек` became “Check” rather than “receipt,” `рыжий кот` became “Red cat” rather than “orange cat,” and `ребёнок` became “The baby” rather than “a child.” These occur in the original model too, so they are not Core ML conversion errors. Keep them visible in retrieval evaluation rather than patching the ten phrases. Wider query coverage and image retrieval quality remain step 3.4/later evaluation work.
+The comparison identifies real translation limitations: `чек` became “Check” rather than “receipt,” `рыжий кот` became “Red cat” rather than “orange cat,” and `ребёнок` became “The baby” rather than “a child.” These occur in the original model too, so they are not Core ML conversion errors. Keep them visible in retrieval evaluation rather than patching the ten phrases. [Step 3.4](RETRIEVAL.md) evaluates development visual queries against the public sample; broader and held-out quality assessment remains separate work.
 
 Generated numerical evidence remains under ignored `ModelArtifacts/Translation/translation-smoke-report.json` and `build/step-3.3-bundled-*.log`. Model, runtime, and preparation versions are reproducible, but this validation does not replace execution on an older physical iPhone running iOS 17.

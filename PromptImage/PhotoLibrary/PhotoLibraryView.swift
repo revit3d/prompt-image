@@ -5,6 +5,7 @@ struct PhotoLibraryView: View {
     @Bindable var library: PhotoLibraryStore
     let showAccess: () -> Void
     let showQuerySetup: () -> Void
+    let showRetrievalDemo: () -> Void
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: 2)]
 
     var body: some View {
@@ -73,7 +74,12 @@ struct PhotoLibraryView: View {
             .navigationTitle("Фотографии")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Язык поиска", systemImage: "character.bubble", action: showQuerySetup)
+                    Menu {
+                        Button("Тест поиска", systemImage: "magnifyingglass", action: showRetrievalDemo)
+                        Button("Язык поиска", systemImage: "character.bubble", action: showQuerySetup)
+                    } label: {
+                        Label("Поиск", systemImage: "magnifyingglass")
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Доступ", systemImage: "lock.shield", action: showAccess)

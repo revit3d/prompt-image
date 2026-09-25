@@ -1,6 +1,6 @@
 # Preparing the CLIP model bundle
 
-Step 3.1 prepares and bundles the two encoders from OpenAI CLIP ViT-B/32. Step 3.2 adds [Swift preprocessing, inference, and numerical validation](INFERENCE.md), including a refined image-model precision policy. Step 3.3 adds [bundled Russian-to-English query translation](TRANSLATION.md). The photo gallery does not invoke inference yet; indexing and search are later steps.
+Step 3.1 prepares and bundles the two encoders from OpenAI CLIP ViT-B/32. Step 3.2 adds [Swift preprocessing, inference, and numerical validation](INFERENCE.md), including a refined image-model precision policy. Step 3.3 adds [bundled Russian-to-English query translation](TRANSLATION.md), and step 3.4 connects them in an [in-memory public-sample search interface](RETRIEVAL.md). The photo gallery does not invoke inference yet; persistent photo-library indexing remains later work.
 
 ## First preparation
 
@@ -99,7 +99,7 @@ Preparation compares PyTorch eager output with the traced encoders, then compare
 
 The iOS test suite checks bundled manifest/tokenizer/license contents, golden token IDs, and CPU-only loading of both compiled encoders with the expected input/output names, shapes, and data types. `build-for-testing` only compiles this test bundle; run `test` to execute these checks.
 
-These checks establish conversion and packaging integrity. They do not establish photo preprocessing parity, semantic-search accuracy, Russian query quality, iPhone inference speed, memory/battery behavior, or Neural Engine compatibility. Step 3.2 supplies separate preprocessing/inference checks and device measurements in [INFERENCE.md](INFERENCE.md). Gallery-driven processing and search remain later work.
+These checks establish conversion and packaging integrity. They do not establish photo preprocessing parity, semantic-search accuracy, Russian query quality, iPhone inference speed, memory/battery behavior, or Neural Engine compatibility. Step 3.2 supplies separate preprocessing/inference checks and device measurements in [INFERENCE.md](INFERENCE.md). Step 3.4 adds a [development visual retrieval evaluation](RETRIEVAL.md); gallery-driven indexing and search remain later work.
 
 ## Step 3.1 validation record
 
