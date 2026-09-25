@@ -1,0 +1,13 @@
+{
+  "runtime_id": "sentencepiece-0.2.1-cbridge-v1",
+  "version": "0.2.1",
+  "source_commit": "31646a467d2051eb904e0b45de3a73e91fe1c1e3",
+  "source_archive": {
+    "url": "https://codeload.github.com/google/sentencepiece/tar.gz/31646a467d2051eb904e0b45de3a73e91fe1c1e3",
+    "sha256": "b4eb17e6bea5c9380ddd79d04d01d6aa5e280be8f3e3cef1f745a80e6d9451ce"
+  },
+  "license": "Apache-2.0",
+  "cmake_version": "3.31.6",
+  "ios_deployment_target": "17.0",
+  "macos_deployment_target": "13.0"
+}

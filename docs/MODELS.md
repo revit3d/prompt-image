@@ -1,6 +1,6 @@
 # Preparing the CLIP model bundle
 
-Step 3.1 prepares and bundles the two encoders from OpenAI CLIP ViT-B/32. Step 3.2 adds [Swift preprocessing, inference, and numerical validation](INFERENCE.md), including a refined image-model precision policy. The photo gallery does not invoke inference yet; translation, indexing, and search are later steps.
+Step 3.1 prepares and bundles the two encoders from OpenAI CLIP ViT-B/32. Step 3.2 adds [Swift preprocessing, inference, and numerical validation](INFERENCE.md), including a refined image-model precision policy. Step 3.3 adds [bundled Russian-to-English query translation](TRANSLATION.md). The photo gallery does not invoke inference yet; indexing and search are later steps.
 
 ## First preparation
 
@@ -48,7 +48,7 @@ Offline rebuilding still requires the installed dependencies and both valid cach
 
 The current model identifier is `openai-clip-vit-b32-fp16-v2`. Version 2 keeps the image convolution in Float32 while retaining FP16 for the remaining image operations and the text encoder. Broader step 3.2 fixtures exposed accumulation error in the fully FP16 convolution; this change restored agreement with the reference at a cost of about 4.5 MiB. Version 1 embeddings must not be mixed with version 2. `tools/models/clip-source.json` pins the [official CLIP source](https://github.com/openai/CLIP/tree/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6), source archive checksum, and official ViT-B/32 checkpoint URL/checksum. The source commit is `d05afc436d78f1c48dc0dbf8e5980a9d471f35f6`; the checkpoint SHA-256 is `40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af`.
 
-The downloaded source includes the [MIT license](https://github.com/openai/CLIP/blob/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6/LICENSE) and [model card](https://github.com/openai/CLIP/blob/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6/model-card.md). Keep these with distributed model artifacts. The model card describes limitations relevant to evaluating this prototype; conversion alone does not establish suitability or retrieval quality. This is the English baseline; Russian queries will require the planned on-device translation stage.
+The downloaded source includes the [MIT license](https://github.com/openai/CLIP/blob/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6/LICENSE) and [model card](https://github.com/openai/CLIP/blob/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6/model-card.md). Keep these with distributed model artifacts. The model card describes limitations relevant to evaluating this prototype; conversion alone does not establish suitability or retrieval quality. This is the English baseline; Russian queries pass through the [on-device translation stage](TRANSLATION.md) before CLIP encoding.
 
 The preparation follows Apple's [PyTorch-to-Core-ML workflow](https://apple.github.io/coremltools/docs-guides/source/convert-pytorch-workflow.html), with separately traced encoders and ML Program export using the mixed precision policy above. The model format's minimum target is iOS 16; this does not change the app's deployment target.
 

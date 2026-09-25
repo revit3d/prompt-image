@@ -16,7 +16,7 @@ The prototype interprets decoded color channels without an ICC transform, matchi
 
 Text uses the pinned CLIP byte vocabulary and ranked BPE merges, preserving EOT when truncating to 77 tokens. Swift operates on byte symbols rather than grapheme clusters. Cleanup includes HTML entities, standard Unicode normalization, width/ligature conversion, whitespace and quote normalization. Known corrupted Latin-1/Windows-1252 sequences and replacement characters fail explicitly: this is not a complete port of ftfy's legacy-encoding repair heuristics. Queries over 16,384 UTF-8 bytes fail before tokenization. The tokenizer keeps no query cache between calls.
 
-Russian token-ID parity tests check the implementation, not Russian search quality. On-device translation belongs to step 3.3. Model preprocessing and text-cleaning licenses are bundled as `Pillow-LICENSE.txt` and `TextCleaning-LICENSE.txt`.
+Russian token-ID parity tests check the implementation, not Russian search quality. Step 3.3 now wraps this English encoder with [on-device query translation](TRANSLATION.md). Model preprocessing and text-cleaning licenses are bundled as `Pillow-LICENSE.txt` and `TextCleaning-LICENSE.txt`.
 
 ## Generate independent reference fixtures
 

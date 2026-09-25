@@ -27,7 +27,7 @@ actor CLIPEmbeddingEngine {
         }
     }
 
-    /// CLIP's English baseline. Russian translation is introduced separately in step 3.3.
+    /// English CLIP baseline. QueryEmbeddingPipeline translates Russian before this call.
     func textEmbedding(_ text: String) throws -> CLIPEmbedding {
         try Task.checkCancellation()
         return try autoreleasepool {
