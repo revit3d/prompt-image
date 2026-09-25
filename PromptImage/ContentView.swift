@@ -8,6 +8,8 @@ struct ContentView: View {
     @State private var library = PhotoLibraryStore()
     @State private var showsSettingsError = false
     @State private var showsAccess = false
+    @State private var showsQuerySetup = false
+    @State private var showsRetrievalDemo = false
 
     private var photoAccess: PhotoLibraryAccess { library.access }
 
@@ -16,7 +18,9 @@ struct ContentView: View {
 
         Group {
             if photoAccess.status == .authorized || photoAccess.status == .limited {
-                PhotoLibraryView(library: library) { showsAccess = true }
+                PhotoLibraryView(library: library, showAccess: { showsAccess = true },
+                                 showQuerySetup: { showsQuerySetup = true },
+                                 showRetrievalDemo: { showsRetrievalDemo = true })
             } else {
                 permissionScreen
             }
@@ -40,6 +44,8 @@ struct ContentView: View {
         .fullScreenCover(item: $library.selectedPhoto) { photo in
             PhotoViewer(photo: library.selectedPhoto ?? photo, provider: library.images)
         }
+        .sheet(isPresented: $showsQuerySetup) { QuerySetupView() }
+        .sheet(isPresented: $showsRetrievalDemo) { RetrievalDemoView() }
         .sheet(isPresented: $showsAccess) {
             NavigationStack {
                 permissionScreen
@@ -85,6 +91,13 @@ struct ContentView: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+
+                if !showsAccess {
+                    Button("Тест поиска", systemImage: "magnifyingglass") { showsRetrievalDemo = true }
+                        .buttonStyle(.borderedProminent)
+                    Button("Язык поиска", systemImage: "character.bubble") { showsQuerySetup = true }
+                        .buttonStyle(.bordered)
+                }
             }
             .frame(maxWidth: 520, alignment: .leading)
             .padding(24)

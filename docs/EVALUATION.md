@@ -2,7 +2,7 @@
 
 The initial benchmark uses public images so development can begin without exporting your personal library. It contains **400 images**: **320 COCO 2017 validation photos** and **80 TextVQA validation images with scene text**. Files and labels stay in the Git-ignored `PrivateData/Evaluation/` directory, outside the app sources.
 
-This prepares future search evaluation. It does not run a model or measure the Hello World app's search quality. The corpus and query counts are practical pilot choices, not a statistically precise estimate for all users.
+These dataset utilities prepare and freeze evaluation inputs; they do not run a model. [Step 3.4](RETRIEVAL.md) adds a separate on-device development visual retrieval run using this corpus. The corpus and query counts are practical pilot choices, not a statistically precise estimate for all users.
 
 ## Download and inspect the sample
 
@@ -43,7 +43,7 @@ PrivateData/Evaluation/
     SOURCE_INFO.json           Source URLs, selection settings, metadata hashes
 ```
 
-The files are downloaded to the Mac. These tools do not access the Photos library, upload data, or put the sample on your phone. The downloader needs a network connection; inventory and validation are local. Git exclusion does not encrypt files or control backups and folder synchronization.
+The files are downloaded to the Mac. These dataset tools do not access the Photos library, upload data, or put the sample on your phone. The downloader needs a network connection; inventory and validation are local. The separate [retrieval-demo preparation and developer transfer](RETRIEVAL.md) copies unchanged images into the app's data container. Git exclusion does not encrypt files or control backups and folder synchronization.
 
 ## Sources and what this sample covers
 
@@ -108,13 +108,17 @@ Resolve reported structural issues and manually check the labels against the ima
 
 After reviewing the labels, run `python3 tools/evaluation.py freeze`. This validates the dataset, exports the two separate query files, and records their SHA-256 fingerprints in `benchmark.json`. Use `queries.development.csv` during development and reserve `queries.holdout.csv` for candidate evaluation. Preserve a copy of the existing benchmark before intentional corrections, then run `freeze` again to refresh the exports. Freezing records a revision; it does not make files read-only or prevent you from inspecting the held-out labels.
 
-Before testing PhotoKit search later, transfer copies of the sample into an iPhone album named **PromptImage Evaluation**. That transfer is a separate step; downloading to the Mac does not modify the phone library. Keep the imported images available locally because the first prototype will skip iCloud downloads.
+For step 3.4, follow [RETRIEVAL.md](RETRIEVAL.md) to transfer a developer-only copy to `Documents/RetrievalDemo` in the app's data container. This preserves the 400 image files and exports only the 28 development visual queries. It requires no Photos import or permission and is suitable for testing the embedding/translation/ranking pipeline before persistent library indexing exists.
+
+Before testing PhotoKit search in a later step, transfer copies of the sample into an iPhone album named **PromptImage Evaluation**. That future transfer is separate from the step 3.4 demo and modifies the phone's library; downloading to the Mac or copying into the app container does not. Keep those imported images available locally because the first prototype will skip iCloud downloads.
 
 Exported-file IDs and dataset IDs are **not PhotoKit asset identifiers**. Filename or byte-hash equality does not reliably map a Mac file to a phone asset, especially if Photos converts it during import. Add and verify that mapping when PhotoKit access is implemented.
 
-## Future scoring
+## Scoring
 
 For each query, **success@5** is 1 if at least one known acceptable image appears among the first five results, otherwise 0. Average these values and report both counts and percentages. Report visual and text queries separately, Russian and English separately within each kind, and development results separately from held-out results.
+
+The step 3.4 [scoring command](RETRIEVAL.md#run-the-development-evaluation) reports development visual success@1, success@5, and MRR@10 separately for Russian and English, with 14 queries in each denominator. Failed and missing queries score zero; they are not removed from the denominator. Top-ten rankings support truncated MRR@10 only. Text queries and held-out queries are not evaluated by that run.
 
 The provisional prototype target is at least 80% success@5 for straightforward held-out visual queries and text queries. There are only six held-out scenarios per kind, so a few failures change the percentage substantially. Russian and English versions of one scenario are related observations, not independent evidence.
 

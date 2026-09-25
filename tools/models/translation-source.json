@@ -1,0 +1,57 @@
+{
+  "model_id": "helsinki-opus-mt-ru-en-fp16-v1",
+  "repository": "Helsinki-NLP/opus-mt-ru-en",
+  "source_commit": "fbd6dc73284f95536648512cc21d57f19191961a",
+  "license": "CC-BY-4.0",
+  "source_languages": [
+    "ru"
+  ],
+  "target_language": "en",
+  "files": {
+    "README.md": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/README.md",
+      "sha256": "58decd5dfb14dfd59bd63a80286869798f94b7d432d249dd289de467ba9a1417",
+      "size": 3159
+    },
+    "config.json": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/config.json",
+      "sha256": "5ea76c78596bce8fe005ef89e00de0924bf83e5f532ce08784ff1fcefb699f5f",
+      "size": 1381
+    },
+    "generation_config.json": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/generation_config.json",
+      "sha256": "31cff5e74efc263ff53efac09e3e350cd462d5c8198b1136b455d63a02d8cad5",
+      "size": 293
+    },
+    "pytorch_model.bin": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/pytorch_model.bin",
+      "sha256": "535450eb5613f3cc912f9ca3e54cfef6c14d201b319c24a88faf776a65538b5d",
+      "size": 306991893
+    },
+    "source.spm": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/source.spm",
+      "sha256": "745998e51ba5b058e38b7ac7765c25c43ed5c1c39cc92b27163b9b2e323c9d7c",
+      "size": 1080169
+    },
+    "target.spm": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/target.spm",
+      "sha256": "16bebef1389a0b8ab452772c4e35b9e605e5713f8ac7baa71ca701394eaa086d",
+      "size": 802781
+    },
+    "tokenizer_config.json": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/tokenizer_config.json",
+      "sha256": "8d826099b8c67179c83ab4ff94aff7ca7bf24ca14319cb0287b9a0b4c40b2a96",
+      "size": 42
+    },
+    "vocab.json": {
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en/resolve/fbd6dc73284f95536648512cc21d57f19191961a/vocab.json",
+      "sha256": "33e95da3be3fa3b50169c4c46693ba2f29fbf4cb29d99044bd07d72d181fa1e9",
+      "size": 2601758
+    },
+    "CC-BY-4.0.txt": {
+      "url": "https://raw.githubusercontent.com/creativecommons/creativecommons.org/7f5253347532fc0cb6cf51d78a7085d081fb4216/docroot/legalcode/by_4.0.txt",
+      "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411",
+      "size": 18657
+    }
+  }
+}

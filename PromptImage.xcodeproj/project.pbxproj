@@ -6,6 +6,27 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		300000000000000000000001 /* CLIPImageEncoder.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000011 /* CLIPImageEncoder.mlpackage */; };
+		300000000000000000000002 /* CLIPTextEncoder.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000012 /* CLIPTextEncoder.mlpackage */; };
+		300000000000000000000003 /* tokenizer.json in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000013 /* tokenizer.json */; };
+		300000000000000000000004 /* model-manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000014 /* model-manifest.json */; };
+		300000000000000000000005 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000015 /* LICENSE.txt */; };
+		320000000000000000000001 /* ModelArtifacts/CLIPValidation in Resources */ = {isa = PBXBuildFile; fileRef = 320000000000000000000011 /* ModelArtifacts/CLIPValidation */; };
+		330000000000000000000001 /* TranslationEncoder.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000011 /* TranslationEncoder.mlpackage */; };
+		330000000000000000000002 /* TranslationDecoder.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000012 /* TranslationDecoder.mlpackage */; };
+		330000000000000000000003 /* source.spm in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000013 /* source.spm */; };
+		330000000000000000000004 /* target.spm in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000014 /* target.spm */; };
+		330000000000000000000005 /* vocab.json in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000015 /* vocab.json */; };
+		330000000000000000000006 /* translation-manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000016 /* translation-manifest.json */; };
+		330000000000000000000007 /* Translation-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000017 /* Translation-LICENSE.txt */; };
+		330000000000000000000008 /* Translation-ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000018 /* Translation-ATTRIBUTION.txt */; };
+		330000000000000000000009 /* ModelArtifacts/SentencePieceRuntime/SentencePiece-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 330000000000000000000019 /* ModelArtifacts/SentencePieceRuntime/SentencePiece-LICENSE.txt */; };
+		33000000000000000000000A /* ModelArtifacts/SentencePieceRuntime/SentencePieceRuntime.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 33000000000000000000001A /* ModelArtifacts/SentencePieceRuntime/SentencePieceRuntime.xcframework */; };
+		33000000000000000000000B /* translation-reference.json in Resources */ = {isa = PBXBuildFile; fileRef = 33000000000000000000001B /* translation-reference.json */; };
+		33000000000000000000000C /* tokenizer-golden.json in Resources */ = {isa = PBXBuildFile; fileRef = 33000000000000000000001C /* tokenizer-golden.json */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		10000000000000000000000B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -19,30 +40,47 @@
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* PromptImage.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PromptImage.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000001 /* PromptImageTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PromptImageTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		300000000000000000000011 /* CLIPImageEncoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = CLIPImageEncoder.mlpackage; sourceTree = "<group>"; };
+		300000000000000000000012 /* CLIPTextEncoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = CLIPTextEncoder.mlpackage; sourceTree = "<group>"; };
+		300000000000000000000013 /* tokenizer.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tokenizer.json; sourceTree = "<group>"; };
+		300000000000000000000014 /* model-manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "model-manifest.json"; sourceTree = "<group>"; };
+		300000000000000000000015 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
+		320000000000000000000011 /* ModelArtifacts/CLIPValidation */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ModelArtifacts/CLIPValidation; sourceTree = "<group>"; };
+		330000000000000000000011 /* TranslationEncoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TranslationEncoder.mlpackage; sourceTree = "<group>"; };
+		330000000000000000000012 /* TranslationDecoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TranslationDecoder.mlpackage; sourceTree = "<group>"; };
+		330000000000000000000013 /* source.spm */ = {isa = PBXFileReference; lastKnownFileType = file; path = source.spm; sourceTree = "<group>"; };
+		330000000000000000000014 /* target.spm */ = {isa = PBXFileReference; lastKnownFileType = file; path = target.spm; sourceTree = "<group>"; };
+		330000000000000000000015 /* vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = vocab.json; sourceTree = "<group>"; };
+		330000000000000000000016 /* translation-manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "translation-manifest.json"; sourceTree = "<group>"; };
+		330000000000000000000017 /* Translation-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Translation-LICENSE.txt"; sourceTree = "<group>"; };
+		330000000000000000000018 /* Translation-ATTRIBUTION.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Translation-ATTRIBUTION.txt"; sourceTree = "<group>"; };
+		330000000000000000000019 /* ModelArtifacts/SentencePieceRuntime/SentencePiece-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "ModelArtifacts/SentencePieceRuntime/SentencePiece-LICENSE.txt"; sourceTree = "<group>"; };
+		33000000000000000000001A /* ModelArtifacts/SentencePieceRuntime/SentencePieceRuntime.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ModelArtifacts/SentencePieceRuntime/SentencePieceRuntime.xcframework; sourceTree = "<group>"; };
+		33000000000000000000001B /* translation-reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "translation-reference.json"; sourceTree = "<group>"; };
+		33000000000000000000001C /* tokenizer-golden.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "tokenizer-golden.json"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		100000000000000000000002 /* PromptImageTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = PromptImageTests;
-			sourceTree = "<group>";
-		};
 		000000000000000000000010 /* PromptImage */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PromptImage;
 			sourceTree = "<group>";
 		};
+		100000000000000000000002 /* PromptImageTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PromptImageTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		100000000000000000000003 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		000000000000000130000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				33000000000000000000000A /* ModelArtifacts/SentencePieceRuntime/SentencePieceRuntime.xcframework in Frameworks */,
+			);
+		};
+		100000000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -55,6 +93,11 @@
 			children = (
 				000000000000000000000010 /* PromptImage */,
 				100000000000000000000002 /* PromptImageTests */,
+				320000000000000000000011 /* ModelArtifacts/CLIPValidation */,
+				300000000000000000000020 /* CLIP Model Artifacts */,
+				330000000000000000000020 /* Translation Model Artifacts */,
+				330000000000000000000019 /* ModelArtifacts/SentencePieceRuntime/SentencePiece-LICENSE.txt */,
+				33000000000000000000001A /* ModelArtifacts/SentencePieceRuntime/SentencePieceRuntime.xcframework */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -68,9 +111,58 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		300000000000000000000020 /* CLIP Model Artifacts */ = {
+			isa = PBXGroup;
+			children = (
+				300000000000000000000011 /* CLIPImageEncoder.mlpackage */,
+				300000000000000000000012 /* CLIPTextEncoder.mlpackage */,
+				300000000000000000000013 /* tokenizer.json */,
+				300000000000000000000014 /* model-manifest.json */,
+				300000000000000000000015 /* LICENSE.txt */,
+			);
+			name = "CLIP Model Artifacts";
+			path = ModelArtifacts/CLIP;
+			sourceTree = "<group>";
+		};
+		330000000000000000000020 /* Translation Model Artifacts */ = {
+			isa = PBXGroup;
+			children = (
+				330000000000000000000011 /* TranslationEncoder.mlpackage */,
+				330000000000000000000012 /* TranslationDecoder.mlpackage */,
+				330000000000000000000013 /* source.spm */,
+				330000000000000000000014 /* target.spm */,
+				330000000000000000000015 /* vocab.json */,
+				330000000000000000000016 /* translation-manifest.json */,
+				330000000000000000000017 /* Translation-LICENSE.txt */,
+				330000000000000000000018 /* Translation-ATTRIBUTION.txt */,
+				33000000000000000000001B /* translation-reference.json */,
+				33000000000000000000001C /* tokenizer-golden.json */,
+			);
+			name = "Translation Model Artifacts";
+			path = ModelArtifacts/Translation;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		000000000000000100000000 /* PromptImage */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "PromptImage" */;
+			buildPhases = (
+				000000000000000120000000 /* Sources */,
+				000000000000000130000000 /* Frameworks */,
+				000000000000000140000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				000000000000000000000010 /* PromptImage */,
+			);
+			name = PromptImage;
+			productName = PromptImage;
+			productReference = 000000000000000000000120 /* PromptImage.app */;
+			productType = "com.apple.product-type.application";
+		};
 		100000000000000000000006 /* PromptImageTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 100000000000000000000007 /* Build configuration list for PBXNativeTarget "PromptImageTests" */;
@@ -92,24 +184,6 @@
 			productReference = 100000000000000000000001 /* PromptImageTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		000000000000000100000000 /* PromptImage */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "PromptImage" */;
-			buildPhases = (
-				000000000000000120000000 /* Sources */,
-				000000000000000130000000 /* Frameworks */,
-				000000000000000140000000 /* Resources */,
-			);
-			buildRules = (
-			);
-			fileSystemSynchronizedGroups = (
-				000000000000000000000010 /* PromptImage */,
-			);
-			name = PromptImage;
-			productName = PromptImage;
-			productReference = 000000000000000000000120 /* PromptImage.app */;
-			productType = "com.apple.product-type.application";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -120,12 +194,12 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					000000000000000100000000 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					100000000000000000000006 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 000000000000000100000000;
-					};
-					000000000000000100000000 = {
-						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -150,29 +224,42 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		100000000000000000000005 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		000000000000000140000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				300000000000000000000001 /* CLIPImageEncoder.mlpackage in Resources */,
+				300000000000000000000002 /* CLIPTextEncoder.mlpackage in Resources */,
+				300000000000000000000003 /* tokenizer.json in Resources */,
+				300000000000000000000004 /* model-manifest.json in Resources */,
+				300000000000000000000005 /* LICENSE.txt in Resources */,
+				330000000000000000000001 /* TranslationEncoder.mlpackage in Resources */,
+				330000000000000000000002 /* TranslationDecoder.mlpackage in Resources */,
+				330000000000000000000003 /* source.spm in Resources */,
+				330000000000000000000004 /* target.spm in Resources */,
+				330000000000000000000005 /* vocab.json in Resources */,
+				330000000000000000000006 /* translation-manifest.json in Resources */,
+				330000000000000000000007 /* Translation-LICENSE.txt in Resources */,
+				330000000000000000000008 /* Translation-ATTRIBUTION.txt in Resources */,
+				330000000000000000000009 /* ModelArtifacts/SentencePieceRuntime/SentencePiece-LICENSE.txt in Resources */,
+			);
+		};
+		100000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				320000000000000000000001 /* ModelArtifacts/CLIPValidation in Resources */,
+				33000000000000000000000B /* translation-reference.json in Resources */,
+				33000000000000000000000C /* tokenizer-golden.json in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		100000000000000000000004 /* Sources */ = {
+		000000000000000120000000 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
-		000000000000000120000000 /* Sources */ = {
+		100000000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
@@ -188,60 +275,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = W6R39CB7TU;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
-			};
-			name = Debug;
-		};
-		100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = W6R39CB7TU;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
-			};
-			name = Release;
-		};
 		000000000000000011000000 /* Debug configuration for PBXProject "PromptImage" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -378,6 +411,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				COREML_CODEGEN_LANGUAGE = None;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = W6R39CB7TU;
 				ENABLE_APP_SANDBOX = YES;
@@ -421,6 +455,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				COREML_CODEGEN_LANGUAGE = None;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = W6R39CB7TU;
 				ENABLE_APP_SANDBOX = YES;
@@ -460,17 +495,63 @@
 			};
 			name = Release;
 		};
+		100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W6R39CB7TU;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
+			};
+			name = Debug;
+		};
+		100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W6R39CB7TU;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		100000000000000000000007 /* Build configuration list for PBXNativeTarget "PromptImageTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */,
-				100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */,
-			);
-			defaultConfigurationName = Release;
-		};
 		000000000000000010000000 /* Build configuration list for PBXProject "PromptImage" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -484,6 +565,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "PromptImage" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "PromptImage" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		100000000000000000000007 /* Build configuration list for PBXNativeTarget "PromptImageTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */,
+				100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */,
 			);
 			defaultConfigurationName = Release;
 		};

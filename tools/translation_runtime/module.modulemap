@@ -1,0 +1,5 @@
+module SentencePieceRuntime {
+    header "SentencePieceRuntime.h"
+    export *
+    link "c++"
+}
