@@ -6,6 +6,14 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		300000000000000000000001 /* CLIPImageEncoder.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000011 /* CLIPImageEncoder.mlpackage */; };
+		300000000000000000000002 /* CLIPTextEncoder.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000012 /* CLIPTextEncoder.mlpackage */; };
+		300000000000000000000003 /* tokenizer.json in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000013 /* tokenizer.json */; };
+		300000000000000000000004 /* model-manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000014 /* model-manifest.json */; };
+		300000000000000000000005 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000015 /* LICENSE.txt */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		10000000000000000000000B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -19,6 +27,11 @@
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* PromptImage.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PromptImage.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000001 /* PromptImageTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PromptImageTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		300000000000000000000011 /* CLIPImageEncoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = CLIPImageEncoder.mlpackage; sourceTree = "<group>"; };
+		300000000000000000000012 /* CLIPTextEncoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = CLIPTextEncoder.mlpackage; sourceTree = "<group>"; };
+		300000000000000000000013 /* tokenizer.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tokenizer.json; sourceTree = "<group>"; };
+		300000000000000000000014 /* model-manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "model-manifest.json"; sourceTree = "<group>"; };
+		300000000000000000000015 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -55,6 +68,7 @@
 			children = (
 				000000000000000000000010 /* PromptImage */,
 				100000000000000000000002 /* PromptImageTests */,
+				300000000000000000000020 /* CLIP Model Artifacts */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -66,6 +80,19 @@
 				100000000000000000000001 /* PromptImageTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		300000000000000000000020 /* CLIP Model Artifacts */ = {
+			isa = PBXGroup;
+			children = (
+				300000000000000000000011 /* CLIPImageEncoder.mlpackage */,
+				300000000000000000000012 /* CLIPTextEncoder.mlpackage */,
+				300000000000000000000013 /* tokenizer.json */,
+				300000000000000000000014 /* model-manifest.json */,
+				300000000000000000000015 /* LICENSE.txt */,
+			);
+			name = "CLIP Model Artifacts";
+			path = ModelArtifacts/CLIP;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -160,6 +187,11 @@
 		000000000000000140000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				300000000000000000000001 /* CLIPImageEncoder.mlpackage in Resources */,
+				300000000000000000000002 /* CLIPTextEncoder.mlpackage in Resources */,
+				300000000000000000000003 /* tokenizer.json in Resources */,
+				300000000000000000000004 /* model-manifest.json in Resources */,
+				300000000000000000000005 /* LICENSE.txt in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
@@ -378,6 +410,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				COREML_CODEGEN_LANGUAGE = None;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = W6R39CB7TU;
 				ENABLE_APP_SANDBOX = YES;
@@ -421,6 +454,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				COREML_CODEGEN_LANGUAGE = None;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = W6R39CB7TU;
 				ENABLE_APP_SANDBOX = YES;

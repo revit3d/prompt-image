@@ -2,7 +2,7 @@
 
 An iOS prototype for searching a personal photo library with natural-language descriptions. The first release is intended for Russia, with a Russian interface and Russian and English search.
 
-The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Indexing, OCR, model inference, and search are future work.
+The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Step 3.1 adds repeatable preparation and bundling of the CLIP image/text encoders; the gallery does not run model inference yet. Indexing, OCR, and search are future work.
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
@@ -11,10 +11,13 @@ Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the 
 - Xcode 27 with its iOS platform support, selected as the active developer environment.
 - An installed iOS Simulator runtime to launch the app in Simulator.
 - For phone testing: a paired iPhone with Developer Mode enabled and an Apple Account configured in Xcode. The initial test device is an iPhone 17 Pro.
+- For model preparation: a native Apple Silicon Mac, Python 3.11, and network access for initial dependency/model downloads. Subsequent app builds and model loading use local artifacts.
 
 The project retains the working signing and deployment settings from the first successful device run. The app's deployment target currently uses Xcode's `$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)` setting; a fixed minimum iOS version has not been chosen yet.
 
 ## Open and run
+
+On a fresh checkout, prepare the models first using the commands below. They are required resources for every Xcode build.
 
 1. Open `PromptImage.xcodeproj` in the repository root. If Xcode still has the earlier nested project open, close that window and reopen this root project after the move.
 2. Select the shared **PromptImage** scheme.
@@ -22,9 +25,23 @@ The project retains the working signing and deployment settings from the first s
 4. For a physical phone, open the app target's **Signing & Capabilities**, keep **Automatically manage signing** enabled, and select your team. The existing bundle identifier is `com.revited.promptimage`; another developer may need a unique identifier for their own team.
 5. Press **⌘R** to build and run.
 
+## Prepare the model bundle
+
+Run from the repository root:
+
+```sh
+/opt/homebrew/bin/python3.11 -m venv ModelArtifacts/.venv
+ModelArtifacts/.venv/bin/python -m pip install -r tools/models/requirements.txt
+ModelArtifacts/.venv/bin/python tools/prepare_clip.py prepare
+```
+
+The tool downloads pinned, checksum-verified CLIP source and weights, exports FP16 Core ML encoders, and publishes the bundle only after conversion checks pass. All downloaded/generated files stay in Git-ignored `ModelArtifacts/`. Xcode compiles the explicitly referenced model packages and bundles the tokenizer, manifest, and license; it does not download models during a build. Missing model artifacts are a build error.
+
+Repeating `prepare` reuses a matching bundle. `prepare --offline` requires cached downloads; `prepare --rebuild --offline` explicitly rebuilds after preparation-code or dependency changes. Run `python3 tools/prepare_clip.py verify` for a dependency-free integrity check without inference. See [the model guide](docs/MODELS.md) for requirements, tensor/preprocessing contracts, provenance, failure recovery, and validation limits.
+
 ## Build verification
 
-Run these commands from the repository root. They compile for Simulator without development signing; the generic destination does not launch a simulator.
+Prepare the model bundle before running these commands from the repository root. They compile for Simulator without development signing; the generic destination does not launch a simulator.
 
 Debug app build:
 
@@ -45,6 +62,8 @@ xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Deb
 ```
 
 `build-for-testing` checks that the test target compiles; it does not exercise app behavior. `PromptImageTests` contains Swift Testing behavioral tests for permissions, gallery refreshes and selection, image-request lifetimes, and local availability. They cover revocation during a fetch or availability check, changes to limited access, coalesced refreshes, deleted/edited photos, cancellation, stale callbacks, synchronous responses, no-network request options, degraded/empty/error responses, timeouts, serial scanning, and foreground pause/resume. These tests use injected providers; they do not exercise real iCloud storage behavior, PhotoKit image decoding, or the system permission dialog.
+
+The model bundle tests check manifest/tokenizer/license contents and load both compiled encoders on CPU to verify tensor interfaces. They do not measure photo retrieval quality or iPhone performance.
 
 Run the behavioral tests on an installed simulator:
 
@@ -105,18 +124,20 @@ PromptImage/
   PromptImageApp.swift          SwiftUI app entry point
   ContentView.swift             Permission and gallery routing
   PhotoLibrary/                Authorization, gallery, image requests, and availability checks
+  Models/                      CLIP manifest validation and explicit model loading
   Assets.xcassets/              Bundled app assets
 Configuration/Info.plist        Typed PhotoKit privacy configuration
 PromptImageTests/
   *.swift                      Permission, gallery, image-loader, and availability tests
 docs/EVALUATION.md              Dataset preparation and evaluation protocol
-tools/                         Dataset download, inventory, and validation utilities
+docs/MODELS.md                  Pinned CLIP preparation and tensor contracts
+tools/                         Dataset utilities and CLIP preparation/verification
 PrivateData/                   Local-only sample photos, labels, and indexes
 ModelArtifacts/                Local-only downloaded and converted models
 build/                         Local build products and results
 ```
 
-`PrivateData`, `ModelArtifacts`, and `build` are ignored by Git and are created only when needed. Keep private data and model artifacts outside the synchronized `PromptImage/` source directory so Xcode does not accidentally bundle them.
+`PrivateData`, `ModelArtifacts`, and `build` are ignored by Git and are created only when needed. Keep private data and model artifacts outside the synchronized `PromptImage/` source directory. Xcode includes only the explicitly referenced prepared CLIP resources from `ModelArtifacts/CLIP/`, excluding downloads and the Python environment.
 
 As features are added, keep these responsibilities separate within the app:
 
@@ -143,7 +164,7 @@ Use a focused `codex/` branch, make small commits with simple messages after eac
 The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app browses permitted photos and checks local source availability without uploading, downloading from iCloud, or modifying them; indexing and search are not implemented yet. Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery, viewer, and availability results and cancels pending requests.
 
 - Keep personal photos, screenshots, evaluation queries and labels, and generated indexes in `PrivateData/` or outside the repository.
-- Keep downloaded weights and converted models in `ModelArtifacts/`. A later milestone will provide pinned model versions, license records, and repeatable preparation instructions.
+- Keep downloaded weights and converted models in `ModelArtifacts/`. Step 3.1 provides pinned versions, license records, checksums, and [repeatable preparation instructions](docs/MODELS.md). Model preparation never reads private evaluation photos or the photo library.
 - Do not commit exported signing keys, provisioning profiles, credentials, device backups, or private logs.
 - Track project configuration, source code, asset catalogs, and shared schemes. Xcode user settings, build products, and signing exports are ignored.
 - The team identifier and bundle identifier in the Xcode project are configuration values; they do not contain the signing private key.
