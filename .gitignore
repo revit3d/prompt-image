@@ -1,0 +1,26 @@
+# macOS and Xcode user settings
+.DS_Store
+xcuserdata/
+*.xcuserstate
+
+# Build products and generated reports
+DerivedData/
+build/
+.build/
+*.xcresult
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+__pycache__/
+*.pyc
+
+# Exported signing material
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.p8
+
+# Private samples, evaluation data, indexes, and model artifacts
+/PrivateData/
+/ModelArtifacts/
