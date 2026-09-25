@@ -4,6 +4,8 @@ An iOS prototype for searching a personal photo library with natural-language de
 
 The current app displays Hello World. Step 1.2 establishes the repository layout, shared Xcode scheme, and a Swift Testing unit-test target. Photo access, indexing, OCR, model inference, and search are future work.
 
+Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
+
 ## Requirements
 
 - Xcode 27 with its iOS platform support, selected as the active developer environment.
@@ -54,6 +56,8 @@ PromptImage/
   Assets.xcassets/              Bundled app assets
 PromptImageTests/
   PromptImageTests.swift        Swift Testing target
+docs/EVALUATION.md              Dataset preparation and evaluation protocol
+tools/                         Dataset download, inventory, and validation utilities
 PrivateData/                   Local-only sample photos, labels, and indexes
 ModelArtifacts/                Local-only downloaded and converted models
 build/                         Local build products and results
@@ -70,6 +74,12 @@ As features are added, keep these responsibilities separate within the app:
 - **Search:** query processing and ranking visual and OCR matches.
 
 These are implementation boundaries for later milestones, not separate packages or implemented services today.
+
+The evaluation utilities use Python 3.9 or later and its standard library. Run their offline integrity tests with:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/tests -v
+```
 
 ## Development workflow
 
