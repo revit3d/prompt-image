@@ -5,10 +5,53 @@ import UIKit
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
-    @State private var photoAccess = PhotoLibraryAccess()
+    @State private var library = PhotoLibraryStore()
     @State private var showsSettingsError = false
+    @State private var showsAccess = false
+
+    private var photoAccess: PhotoLibraryAccess { library.access }
 
     var body: some View {
+        @Bindable var library = library
+
+        Group {
+            if photoAccess.status == .authorized || photoAccess.status == .limited {
+                PhotoLibraryView(library: library) { showsAccess = true }
+            } else {
+                permissionScreen
+            }
+        }
+        .task { library.refresh() }
+        .onChange(of: photoAccess.status) { _, status in
+            if status != .authorized && status != .limited {
+                showsAccess = false
+            }
+            library.refresh()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                library.refresh()
+            }
+        }
+        .fullScreenCover(item: $library.selectedPhoto) { photo in
+            PhotoViewer(photo: library.selectedPhoto ?? photo, provider: library.images)
+        }
+        .sheet(isPresented: $showsAccess) {
+            NavigationStack {
+                permissionScreen
+                    .navigationTitle("Доступ к фотографиям")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Закрыть", systemImage: "xmark") { showsAccess = false }
+                        }
+                    }
+            }
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var permissionScreen: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -42,11 +85,6 @@ struct ContentView: View {
             .frame(maxWidth: 520, alignment: .leading)
             .padding(24)
             .frame(maxWidth: .infinity)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                photoAccess.refresh()
-            }
         }
         .alert("Не удалось открыть настройки", isPresented: $showsSettingsError) {
             Button("Понятно", role: .cancel) { }
