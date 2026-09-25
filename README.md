@@ -2,7 +2,7 @@
 
 An iOS prototype for searching a personal photo library with natural-language descriptions. The first release is intended for Russia, with a Russian interface and Russian and English search.
 
-The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Steps 3.1–3.2 add repeatable CLIP preparation, preprocessing, and local embeddings with independent Python-reference tests. Step 3.3 adds a **Язык поиска** screen and bundled Russian-to-English translation before query encoding. Step 3.4 connects these models in **Тест поиска**, a minimal interface that searches a separately copied public sample using an in-memory index. Indexing the user's Photos library, persistent storage, and OCR remain future work.
+The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Steps 3.1–3.2 add repeatable CLIP preparation, preprocessing, and local embeddings with independent Python-reference tests. Step 3.3 adds a **Язык поиска** screen and bundled Russian-to-English translation before query encoding. Step 3.4 connects these models in **Тест поиска**, a minimal interface that searches a separately copied public sample using an in-memory index. Step 4.1 adds on-device Russian/English OCR through **Распознать текст** in the photo viewer. Persistent photo-library indexing and combined search remain future work.
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
@@ -88,6 +88,8 @@ Query tests cover language routing, English bypass, translation failure and miss
 
 Retrieval tests cover cosine ranking, model compatibility, deterministic ties, corpus integrity, cancellation, and screen-state lifetimes. A separate [development retrieval evaluation](docs/RETRIEVAL.md#run-the-development-evaluation) runs the real models over the manually transferred sample. It is enabled only when the sample exists in the app's data container; a skipped test is not retrieval validation.
 
+OCR tests exercise real Vision recognition on synthetic Russian/English text, rotation, blank images, and long screenshots, plus image limits and tile geometry. Injected-provider/store tests cover no-network requests, unavailable sources, timeouts, cancellation, and stale results. See [OCR.md](docs/OCR.md) for the focused test command and manual phone checks. Synthetic recognition does not establish accuracy on personal photos or prove real iCloud behavior.
+
 Run the behavioral tests on an installed simulator using Release optimization for the large image fixtures. `ENABLE_TESTABILITY=YES` enables the test target's imports:
 
 ```sh
@@ -158,6 +160,12 @@ Availability checks use [`requestImageDataAndOrientation`](https://developer.app
 
 Only one source-data request is active at a time. The app reads the compressed data only to check its presence, then discards it without decoding, saving, or logging it. This limits concurrency, not the absolute byte size of one large asset. The scan retains IDs/statuses in memory for the current app session; it is not a persistent index and does not prove successful OCR/model decoding. Availability can change after a check and must be checked again when later processing begins. An initiated scan picks up added or edited photos while active; manual pause disables automatic continuation.
 
+## Try text recognition on iPhone
+
+Open a photo or screenshot, tap **Распознать текст**, then **Начать распознавание**. Russian and English text appears in a selectable result; an empty successful result shows **Текст не найден**. Images requiring an iCloud download are skipped. Recognition is explicit and uses the locally available current image, independently of the display thumbnail and availability check.
+
+Closing the text screen or leaving the app clears the result and cancels pending work. On returning, start recognition again. Nothing is saved to an OCR index yet. See [OCR.md](docs/OCR.md) for limits, image handling, and the recipe/meme/screenshot validation checklist.
+
 ## Repository layout
 
 ```text
@@ -169,6 +177,7 @@ PromptImage/
   Models/                      CLIP resources, preprocessing, tokenization, and embeddings
   Query/                       Language setup, local translation, and query embeddings
   Retrieval/                   In-memory sample index, ranking, and test-search interface
+  OCR/                         Local text recognition, image tiling, and viewer state
   Assets.xcassets/              Bundled app assets
 Configuration/Info.plist        Typed PhotoKit privacy configuration
 PromptImageTests/
@@ -178,6 +187,7 @@ docs/MODELS.md                  Pinned CLIP preparation and tensor contracts
 docs/INFERENCE.md               Swift inference validation and phone benchmarking
 docs/TRANSLATION.md             Russian query setup and translation validation
 docs/RETRIEVAL.md               Development sample transfer, search, and evaluation
+docs/OCR.md                     OCR behavior, limits, and validation
 tools/                         Dataset utilities and model/runtime preparation
 PrivateData/                   Local-only sample photos, labels, and indexes
 ModelArtifacts/                Local-only downloaded and converted models
@@ -194,7 +204,7 @@ As features are added, keep these responsibilities separate within the app:
 - **Persistence:** the local index, processing status, and model versions.
 - **Search:** query processing and ranking visual and OCR matches.
 
-The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today. Sample retrieval adds separate ranking, corpus loading, and screen-state coordination; persistent photo-library indexing and combined OCR search remain later work.
+The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today. Sample retrieval adds separate ranking, corpus loading, and screen-state coordination. Per-photo OCR separates source access, recognition, and screen state; persistent photo-library indexing and combined OCR search remain later work.
 
 The evaluation utilities use Python 3.9 or later and its standard library. Run their offline integrity tests with:
 
@@ -208,7 +218,7 @@ Use a focused `codex/` branch, make small commits with simple messages after eac
 
 ## Prototype privacy and data handling
 
-The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app browses permitted photos and checks local source availability without uploading, downloading from iCloud, or modifying them. **Тест поиска** searches a separately copied public sample with local models; personal-library indexing and OCR are not implemented yet. Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery, viewer, and availability results and cancels pending requests.
+The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app browses permitted photos, checks local source availability, and recognizes text in an explicitly selected photo without uploading, downloading from iCloud, or modifying images. **Тест поиска** searches a separately copied public sample with local models; personal-library indexing is not implemented yet. OCR source bytes and text stay in memory, with no file writes or content logging. Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery, viewer, availability/OCR results, and cancels pending work.
 
 - Keep personal photos, screenshots, evaluation queries and labels, and generated indexes in `PrivateData/` or outside the repository.
 - Keep downloaded weights and converted models in `ModelArtifacts/`. Step 3.1 provides pinned versions, license records, checksums, and [repeatable preparation instructions](docs/MODELS.md). Model preparation never reads private evaluation photos or the photo library.

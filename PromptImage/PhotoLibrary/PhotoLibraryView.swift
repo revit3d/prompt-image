@@ -157,6 +157,9 @@ struct PhotoViewer: View {
     let photo: LibraryPhoto
     let provider: any PhotoImageProviding
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showsOCR = false
+    @State private var ocr = PhotoOCRStore()
 
     var body: some View {
         NavigationStack {
@@ -166,12 +169,32 @@ struct PhotoViewer: View {
                 .navigationTitle("Фотография")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Распознать текст", systemImage: "text.viewfinder") {
+                            showsOCR = true
+                        }
+                        .accessibilityIdentifier("showPhotoOCR")
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Закрыть", systemImage: "xmark") { dismiss() }
+                        Button("Закрыть", systemImage: "xmark") {
+                            ocr.deactivate()
+                            dismiss()
+                        }
                     }
                 }
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showsOCR, onDismiss: { ocr.deactivate() }) {
+            PhotoOCRView(photo: photo, store: ocr)
+        }
+        .onChange(of: photo) { _, _ in
+            ocr.deactivate()
+            showsOCR = false
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { ocr.deactivate() }
+        }
+        .onDisappear { ocr.deactivate() }
     }
 }
 
