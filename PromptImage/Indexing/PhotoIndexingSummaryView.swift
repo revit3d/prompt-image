@@ -3,6 +3,7 @@ import SwiftUI
 struct PhotoIndexingSummaryView: View {
     let store: PhotoIndexingStore
     let beforeStarting: () -> Void
+    @State private var confirmsRebuild = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -11,6 +12,13 @@ struct PhotoIndexingSummaryView: View {
                     .font(.headline)
                 Spacer()
                 controls
+                Menu {
+                    Button("Перестроить индекс") { confirmsRebuild = true }
+                } label: {
+                    Label("Действия с индексом", systemImage: "ellipsis.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(store.isBusy || store.phase == .waitingForLibrary || store.summary.totalCount == 0)
             }
 
             if store.phase == .preparing || store.phase == .waitingForLibrary {
@@ -46,6 +54,10 @@ struct PhotoIndexingSummaryView: View {
                 Text(message)
                     .foregroundStyle(.secondary)
             }
+            if store.followsLibraryChanges {
+                Text("Новые и изменённые снимки обрабатываются автоматически. После возврата в приложение повторно проверяются снимки, ранее доступные только в iCloud.")
+                    .foregroundStyle(.secondary)
+            }
 
             if store.summary.failedCount > 0 || store.summary.downloadRequiredCount > 0 {
                 Button("Повторить пропущенные") {
@@ -64,18 +76,26 @@ struct PhotoIndexingSummaryView: View {
         .padding(14)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
         .accessibilityIdentifier("photoIndexingSummary")
+        .confirmationDialog("Перестроить индекс?", isPresented: $confirmsRebuild, titleVisibility: .visible) {
+            Button("Перестроить") {
+                beforeStarting()
+                store.rebuild()
+            }
+        } message: {
+            Text("Сохранённые результаты будут заменены повторной обработкой. Это может занять время. Фотографии останутся в медиатеке.")
+        }
     }
 
     @ViewBuilder
     private var controls: some View {
-        if store.wantsToRun {
+        if store.wantsToRun || store.followsLibraryChanges {
             Button("Пауза") { store.pause() }
                 .disabled(store.phase == .pausing)
                 .accessibilityIdentifier("pausePhotoIndexing")
         } else if store.isBusy {
             ProgressView().controlSize(.small)
                 .accessibilityLabel("Завершение текущей обработки")
-        } else if store.phase == .failed || store.summary.pendingCount > 0 {
+        } else if store.phase == .failed || store.summary.totalCount > 0 {
             Button(startLabel) {
                 beforeStarting()
                 store.start()

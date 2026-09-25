@@ -8,6 +8,8 @@ Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the 
 
 Step 4.2 supplies the [persistent SQLite index](docs/PERSISTENCE.md): versioned embeddings and OCR, durable processing status, and Russian/English full-text lookup. Step 4.3 adds **Подготовка к поиску** in the gallery: explicit start, saved progress, pause/resume, and retry for skipped photos. See [the indexing guide](docs/INDEXING.md) for phone checks and current limits. The viewer's separate OCR results still remain temporary.
 
+Step 4.4 keeps an enabled index current as photos are added, edited, deleted, or removed from access. PhotoKit content notifications invalidate old results even when metadata is unchanged. Cloud-only stages are rechecked once per enabled foreground/start cycle; failures remain on explicit retry. **Пауза** stops automatic updates, and **⋯ → Перестроить индекс** supplies a manual rebuild fallback. See [library changes and validation](docs/LIBRARY_CHANGES.md).
+
 ## Requirements
 
 - Xcode 27 with its iOS platform support, selected as the active developer environment.
@@ -197,6 +199,7 @@ docs/TRANSLATION.md             Russian query setup and translation validation
 docs/RETRIEVAL.md               Development sample transfer, search, and evaluation
 docs/OCR.md                     OCR behavior, limits, and validation
 docs/INDEXING.md                Foreground indexing, recovery, and phone checks
+docs/LIBRARY_CHANGES.md         Content changes, automatic updates, and rebuild recovery
 docs/PERSISTENCE.md             Storage contracts, privacy, and validation
 tools/                         Dataset utilities and model/runtime preparation
 PrivateData/                   Local-only sample photos, labels, and indexes

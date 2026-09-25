@@ -175,10 +175,12 @@ struct PhotoIndexingStoreTests {
             #expect(fixture.store.summary.ocrCount == 2)
             let firstRequests = fixture.source.requests.count
 
-            // Ordinary Start does not turn skipped stages into an automatic loop.
+            // Each explicit Start rechecks iCloud originals once, but leaves failures
+            // for Retry. The still-cloud-only asset must not produce an endless loop.
             fixture.store.start()
             try await fixture.waitUntilFinished()
-            #expect(fixture.source.requests.count == firstRequests)
+            #expect(fixture.source.requests.count == firstRequests + 1)
+            #expect(fixture.processor.embeddingIDs.filter { $0 == "failed" }.count == 1)
 
             fixture.source.responses.removeValue(forKey: "cloud")
             fixture.store.retry()
@@ -290,6 +292,244 @@ struct PhotoIndexingStoreTests {
             #expect(fixture.source.requests.isEmpty)
         }
     }
+
+    @Test
+    func finishedSessionIndexesAdditionsAndRemovesDeletionsWithoutRepeatingUnchangedPhotos() async throws {
+        try await withIndexingFixture { fixture in
+            try await fixture.prepare([indexingPhoto("a")])
+            fixture.store.start()
+            try await fixture.waitUntilFinished()
+            #expect(fixture.store.followsLibraryChanges)
+            #expect(!fixture.store.wantsToRun)
+
+            fixture.store.updatePhotos([indexingPhoto("a")])
+            try await fixture.waitUntilFinished()
+            #expect(fixture.source.requests.map(\.photo.id) == ["a"])
+
+            fixture.accessibleIDs = ["a", "b"]
+            fixture.store.updatePhotos([indexingPhoto("a"), indexingPhoto("b")])
+            try await fixture.waitUntilFinished()
+            #expect(fixture.source.requests.map(\.photo.id) == ["a", "b"])
+            #expect(fixture.store.summary.completeCount == 2)
+
+            fixture.accessibleIDs = ["b"]
+            fixture.store.updatePhotos([indexingPhoto("b")])
+            try await fixture.waitUntilFinished()
+            #expect(try await fixture.database.record(for: "a") == nil)
+            #expect(fixture.store.summary.completeCount == 1)
+            #expect(fixture.source.requests.count == 2)
+            #expect(try await fixture.database.searchOCR("recipe", version: indexingVersions.ocr).map(\.assetID) == ["b"])
+        }
+    }
+
+    @Test
+    func contentChangeWithIdenticalMetadataReplacesBothStagesAndSearchableText() async throws {
+        try await withIndexingFixture { fixture in
+            let photos = [indexingPhoto("a"), indexingPhoto("b")]
+            try await fixture.prepare(photos)
+            fixture.store.start()
+            try await fixture.waitUntilFinished()
+            let original = try #require(try await fixture.database.record(for: "a"))
+            let kept = try #require(try await fixture.database.record(for: "b"))
+            fixture.source.responses["a"] = .source(indexingSource("updated"))
+
+            fixture.store.libraryDidChange(PhotoLibraryChange(contentChangedIDs: ["a"]))
+            fixture.store.updatePhotos(photos)
+            try await fixture.waitUntilFinished()
+
+            let current = try #require(try await fixture.database.record(for: "a"))
+            #expect(current.photo == original.photo)
+            #expect(current.generation != original.generation)
+            #expect(current.embedding.status == .complete)
+            #expect(current.ocr.status == .complete)
+            #expect(try await fixture.database.record(for: "b") == kept)
+            #expect(try await fixture.database.searchOCR("a", version: indexingVersions.ocr).isEmpty)
+            #expect(try await fixture.database.searchOCR("updated", version: indexingVersions.ocr).map(\.assetID) == ["a"])
+            #expect(fixture.processor.embeddingIDs == ["a", "b", "updated"])
+        }
+    }
+
+    @Test
+    func coalescedContentChangesWaitForInferenceAndKeepEveryInvalidation() async throws {
+        try await withIndexingFixture { fixture in
+            fixture.processor.holdNext("b", stage: .embedding)
+            let photos = [indexingPhoto("a"), indexingPhoto("b")]
+            try await fixture.prepare(photos)
+            fixture.store.start()
+            try await indexingEventually { fixture.processor.isWaiting("b", stage: .embedding) }
+            let oldA = try #require(try await fixture.database.record(for: "a"))
+            let oldB = try #require(try await fixture.database.record(for: "b"))
+            fixture.accessibleIDs = ["a", "b", "c"]
+            let updated = photos + [indexingPhoto("c")]
+
+            fixture.store.libraryDidChange(PhotoLibraryChange(contentChangedIDs: ["a"]))
+            fixture.store.updatePhotos(updated)
+            fixture.store.libraryDidChange(PhotoLibraryChange(contentChangedIDs: ["b"]))
+            fixture.store.updatePhotos(updated)
+            for _ in 0..<20 { await Task.yield() }
+            #expect(fixture.source.requests.map(\.photo.id) == ["a", "b"])
+            #expect(fixture.store.summary == .empty)
+
+            fixture.processor.release("b", stage: .embedding)
+            try await fixture.waitUntilFinished()
+
+            #expect(try await fixture.database.record(for: "a")?.generation != oldA.generation)
+            #expect(try await fixture.database.record(for: "b")?.generation != oldB.generation)
+            #expect(fixture.processor.embeddingIDs == ["a", "b", "a", "b", "c"])
+            #expect(fixture.processor.ocrIDs == ["a", "a", "b", "c"])
+            #expect(fixture.processor.maximumConcurrentCalls == 1)
+            #expect(fixture.store.summary.completeCount == 3)
+        }
+    }
+
+    @Test
+    func manualPauseDisarmsAutomaticIndexingAfterTheQueueFinishes() async throws {
+        try await withIndexingFixture { fixture in
+            try await fixture.prepare([indexingPhoto("a")])
+            fixture.store.start()
+            try await fixture.waitUntilFinished()
+            fixture.store.pause()
+            #expect(!fixture.store.followsLibraryChanges)
+            fixture.accessibleIDs = ["a", "b"]
+            let updated = [indexingPhoto("a"), indexingPhoto("b")]
+            fixture.store.libraryDidChange(PhotoLibraryChange())
+            fixture.store.updatePhotos(updated)
+            try await indexingEventually { !fixture.store.isBusy && fixture.store.phase == .ready }
+            fixture.store.setActive(false)
+            fixture.store.setActive(true)
+            fixture.store.updatePhotos(updated)
+            try await indexingEventually { !fixture.store.isBusy && fixture.store.phase == .ready }
+
+            #expect(fixture.store.summary.completeCount == 1)
+            #expect(fixture.store.summary.pendingCount == 1)
+            #expect(fixture.source.requests.map(\.photo.id) == ["a"])
+            #expect(!fixture.store.wantsToRun)
+            #expect(!fixture.store.followsLibraryChanges)
+
+            fixture.store.start()
+            try await fixture.waitUntilFinished()
+            #expect(fixture.source.requests.map(\.photo.id) == ["a", "b"])
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func unavailableModelsDoNotRetainOldResultsForEditedPhotos(identicalMetadata: Bool) async throws {
+        try await withIndexingFixture { fixture in
+            for id in ["edit", "keep", "remove"] {
+                try await seedCompletedIndex(fixture.database, photo: indexingPhoto(id))
+            }
+            fixture.processor.setVersionsFailure(true)
+            fixture.accessibleIDs = ["edit", "keep"]
+            fixture.store.setActive(true)
+            let edited = identicalMetadata ? indexingPhoto("edit") : LibraryPhoto(id: "edit", creationDate: nil,
+                modificationDate: Date(timeIntervalSinceReferenceDate: 1), pixelWidth: 100, pixelHeight: 100)
+            if identicalMetadata {
+                fixture.store.libraryDidChange(PhotoLibraryChange(contentChangedIDs: ["edit"]))
+            }
+            fixture.store.updatePhotos([edited, indexingPhoto("keep")])
+            try await indexingEventually { !fixture.store.isBusy && fixture.store.phase == .failed }
+
+            #expect(try await fixture.database.record(for: "edit") == nil)
+            #expect(try await fixture.database.record(for: "remove") == nil)
+            #expect(try await fixture.database.embeddings(modelID: indexingVersions.embedding).map(\.id) == ["keep"])
+            #expect(try await fixture.database.searchOCR("recipe", version: indexingVersions.ocr).map(\.assetID) == ["keep"])
+            #expect(fixture.source.requests.isEmpty)
+        }
+    }
+
+    @Test
+    func foregroundRechecksCloudOriginalsOnceWithoutMetadataChangesOrRetryingFailures() async throws {
+        try await withIndexingFixture { fixture in
+            let photos = [indexingPhoto("cloud"), indexingPhoto("failed")]
+            fixture.source.responses["cloud"] = .requiresDownload
+            fixture.processor.failNextEmbedding("failed")
+            try await fixture.prepare(photos)
+            fixture.store.start()
+            try await fixture.waitUntilFinished()
+            #expect(fixture.source.requests.filter { $0.photo.id == "cloud" }.count == 1)
+
+            // An observer refresh alone cannot repeatedly requeue cloud skips.
+            fixture.store.libraryDidChange(PhotoLibraryChange())
+            fixture.store.updatePhotos(photos)
+            try await fixture.waitUntilFinished()
+            #expect(fixture.source.requests.filter { $0.photo.id == "cloud" }.count == 1)
+            fixture.store.setActive(false)
+            fixture.store.setActive(true)
+            fixture.store.updatePhotos(photos)
+            try await fixture.waitUntilFinished()
+            #expect(fixture.source.requests.filter { $0.photo.id == "cloud" }.count == 2)
+            #expect(fixture.store.summary.downloadRequiredCount == 1)
+
+            fixture.source.responses.removeValue(forKey: "cloud")
+            fixture.store.setActive(false)
+            fixture.store.setActive(true)
+            fixture.store.updatePhotos(photos)
+            try await fixture.waitUntilFinished()
+
+            #expect(fixture.source.requests.filter { $0.photo.id == "cloud" }.count == 3)
+            #expect(fixture.processor.embeddingIDs.filter { $0 == "cloud" }.count == 1)
+            #expect(fixture.processor.embeddingIDs.filter { $0 == "failed" }.count == 1)
+            #expect(fixture.store.summary.downloadRequiredCount == 0)
+            #expect(fixture.store.summary.failedCount == 1)
+            #expect(fixture.store.summary.completeCount == 1)
+        }
+    }
+
+    @Test(arguments: PhotoIndexStage.allCases)
+    func changedPipelineVersionReprocessesOnlyThatStage(stage: PhotoIndexStage) async throws {
+        try await withIndexingFixture { fixture in
+            let photos = [indexingPhoto("a")]
+            try await fixture.prepare(photos)
+            fixture.store.start()
+            try await fixture.waitUntilFinished()
+            let original = try #require(try await fixture.database.record(for: "a"))
+            let changed = PhotoIndexVersions(
+                embedding: stage == .embedding ? "clip-indexing-v2" : indexingVersions.embedding,
+                ocr: stage == .ocr ? "ocr-indexing-v2" : indexingVersions.ocr)
+            fixture.processor.setVersions(changed)
+
+            fixture.store.updatePhotos(photos)
+            try await fixture.waitUntilFinished()
+
+            let current = try #require(try await fixture.database.record(for: "a"))
+            #expect(current.generation == original.generation)
+            #expect(current.embedding.version == changed.embedding)
+            #expect(current.ocr.version == changed.ocr)
+            #expect(fixture.store.summary.completeCount == 1)
+            #expect(fixture.processor.embeddingIDs.count == (stage == .embedding ? 2 : 1))
+            #expect(fixture.processor.ocrIDs.count == (stage == .ocr ? 2 : 1))
+            #expect(try await fixture.database.embeddings(modelID: changed.embedding).map(\.id) == ["a"])
+            #expect(try await fixture.database.searchOCR("recipe", version: changed.ocr).map(\.assetID) == ["a"])
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func explicitRebuildAndNonincrementalChangesReplaceEveryGeneration(explicitRebuild: Bool) async throws {
+        try await withIndexingFixture { fixture in
+            let photos = [indexingPhoto("a"), indexingPhoto("b")]
+            try await fixture.prepare(photos)
+            fixture.store.start()
+            try await fixture.waitUntilFinished()
+            let oldA = try #require(try await fixture.database.record(for: "a"))
+            let oldB = try #require(try await fixture.database.record(for: "b"))
+
+            if explicitRebuild {
+                fixture.store.pause()
+                fixture.store.rebuild()
+            } else {
+                fixture.store.libraryDidChange(PhotoLibraryChange(requiresFullReindex: true))
+                fixture.store.updatePhotos(photos)
+            }
+            try await fixture.waitUntilFinished()
+
+            #expect(try await fixture.database.record(for: "a")?.generation != oldA.generation)
+            #expect(try await fixture.database.record(for: "b")?.generation != oldB.generation)
+            #expect(fixture.processor.embeddingIDs == ["a", "b", "a", "b"])
+            #expect(fixture.processor.ocrIDs == ["a", "b", "a", "b"])
+            #expect(fixture.store.summary.completeCount == 2)
+            #expect(fixture.store.followsLibraryChanges)
+        }
+    }
 }
 
 private let indexingVersions = PhotoIndexVersions(embedding: "clip-indexing-test", ocr: "ocr-indexing-test")
@@ -302,8 +542,8 @@ private func indexingSource(_ id: String) -> PhotoOCRSource {
     PhotoOCRSource(data: Data(id.utf8), orientation: .up)
 }
 
-private func indexingEmbedding() throws -> CLIPEmbedding {
-    try CLIPEmbedding(rawValues: [1] + Array(repeating: 0, count: 511), modelID: indexingVersions.embedding)
+private func indexingEmbedding(modelID: String = indexingVersions.embedding) throws -> CLIPEmbedding {
+    try CLIPEmbedding(rawValues: [1] + Array(repeating: 0, count: 511), modelID: modelID)
 }
 
 private func indexingOCR(_ id: String) -> PhotoOCRResult {
@@ -411,6 +651,7 @@ private final class IndexingProcessorStub: PhotoIndexProcessing {
     private var gates: [String: CheckedContinuation<Void, Never>] = [:]
     private var failedNextEmbeddings: Set<String> = []
     private var failsVersions = false
+    private var currentVersions = indexingVersions
     private var activeCalls = 0
     private(set) var maximumConcurrentCalls = 0
     private(set) var embeddingIDs: [String] = []
@@ -422,7 +663,7 @@ private final class IndexingProcessorStub: PhotoIndexProcessing {
     @MainActor func versions() async throws -> PhotoIndexVersions {
         versionsCallCount += 1
         if failsVersions { throw IndexingTestError.unavailableVersions }
-        return indexingVersions
+        return currentVersions
     }
 
     @MainActor func embedding(_ source: PhotoOCRSource) async throws -> CLIPEmbedding {
@@ -431,7 +672,7 @@ private final class IndexingProcessorStub: PhotoIndexProcessing {
         await enter(id, stage: .embedding)
         defer { activeCalls -= 1 }
         if failedNextEmbeddings.remove(id) != nil { throw PhotoOCRError.invalidImage }
-        return try indexingEmbedding()
+        return try indexingEmbedding(modelID: currentVersions.embedding)
     }
 
     @MainActor func recognize(_ source: PhotoOCRSource) async throws -> PhotoOCRResult {
@@ -443,6 +684,7 @@ private final class IndexingProcessorStub: PhotoIndexProcessing {
     }
 
     @MainActor func unload() async { }
+    func setVersions(_ versions: PhotoIndexVersions) { currentVersions = versions }
     func setVersionsFailure(_ failure: Bool) { failsVersions = failure }
     func failNextEmbedding(_ id: String) { failedNextEmbeddings.insert(id) }
     func holdNext(_ id: String, stage: PhotoIndexStage) { heldNext.insert(key(id, stage)) }

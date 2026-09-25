@@ -10,6 +10,7 @@ final class PhotoLibraryStore {
     let indexing: PhotoIndexingStore?
     private(set) var photos: [LibraryPhoto] = []
     private(set) var isLoading = false
+    private(set) var imageRevision = 0
     var selectedPhoto: LibraryPhoto?
 
     @ObservationIgnored private let provider: any PhotoLibraryProviding
@@ -62,8 +63,8 @@ final class PhotoLibraryStore {
 
         if !isObserving {
             isObserving = true
-            provider.startObserving { [weak self] in
-                self?.refresh()
+            provider.startObserving { [weak self] change in
+                self?.libraryDidChange(change)
             }
         }
 
@@ -74,6 +75,16 @@ final class PhotoLibraryStore {
         fetchPhotos()
     }
 
+    func setActive(_ active: Bool) {
+        // Following the library may schedule new indexing after any refresh.
+        // Keep the diagnostic source scan out of that worker's memory budget.
+        if active, indexing?.followsLibraryChanges == true {
+            availability.pause()
+        }
+        availability.setActive(active)
+        indexing?.setActive(active)
+    }
+
     func pauseIndexingForInteractiveWork() async {
         availability.pause()
         indexing?.pause()
@@ -82,6 +93,22 @@ final class PhotoLibraryStore {
 
     private var canReadPhotos: Bool {
         access.status == .authorized || access.status == .limited
+    }
+
+    private func libraryDidChange(_ change: PhotoLibraryChange) {
+        // Deliver invalidation before awaiting the coalesced metadata fetch.
+        // The index owns the accumulated IDs until reconciliation succeeds.
+        indexing?.libraryDidChange(change)
+        if change.requiresFullReindex || !change.contentChangedIDs.isEmpty {
+            images.cancelAll()
+            imageRevision += 1
+            availability.clear()
+            if let selectedPhoto,
+               change.requiresFullReindex || change.contentChangedIDs.contains(selectedPhoto.id) {
+                self.selectedPhoto = nil
+            }
+        }
+        refresh()
     }
 
     private func refreshAuthorization() {

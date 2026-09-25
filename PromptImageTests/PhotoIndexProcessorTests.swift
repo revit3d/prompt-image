@@ -53,6 +53,7 @@ struct PhotoIndexProcessorTests {
             // This requires the image model to load again without redoing the first photo.
             let second = photo("second")
             source.deferredAssetIDs = [second.id]
+            indexing.pause()
             indexing.updatePhotos([first, second])
             try await eventually { !indexing.isBusy }
             try #require(indexing.phase == .ready)

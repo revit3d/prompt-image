@@ -29,8 +29,7 @@ struct ContentView: View {
             }
         }
         .task {
-            library.availability.setActive(scenePhase == .active)
-            library.indexing?.setActive(scenePhase == .active)
+            library.setActive(scenePhase == .active)
             library.refresh()
         }
         .onChange(of: photoAccess.status) { _, status in
@@ -45,13 +44,13 @@ struct ContentView: View {
             } else {
                 cancelInteractivePresentation()
             }
-            library.availability.setActive(phase == .active)
-            library.indexing?.setActive(phase == .active)
+            library.setActive(phase == .active)
         }
         .fullScreenCover(item: $library.selectedPhoto) { photo in
             PhotoViewer(photo: library.selectedPhoto ?? photo, provider: library.images) {
                 await library.pauseIndexingForInteractiveWork()
             }
+            .id(library.imageRevision)
         }
         .sheet(isPresented: $showsQuerySetup) { QuerySetupView() }
         .sheet(isPresented: $showsRetrievalDemo) { RetrievalDemoView() }

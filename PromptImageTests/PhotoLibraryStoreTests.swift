@@ -219,6 +219,112 @@ struct PhotoLibraryStoreTests {
         #expect(fixture.store.photos.isEmpty)
         #expect(!fixture.store.isLoading)
     }
+
+    @Test
+    func contentNotificationInvalidatesImagesAndScanBeforeEqualMetadataFetch() async {
+        let fixture = LibraryFixture(status: .authorized)
+        let original = samplePhoto("edited")
+        await fixture.load([original])
+        fixture.store.selectedPhoto = original
+        fixture.store.availability.start()
+        await fixture.availability.waitUntilRequested()
+
+        fixture.provider.sendChange(PhotoLibraryChange(contentChangedIDs: [original.id]))
+
+        #expect(fixture.store.selectedPhoto == nil)
+        #expect(fixture.images.cancelAllCount == 1)
+        #expect(fixture.store.imageRevision == 1)
+        #expect(fixture.availability.cancelCount == 1)
+        #expect(!fixture.store.availability.hasStarted)
+        await fixture.provider.waitUntilRequested(2)
+        fixture.provider.complete(2, with: [original])
+        await fixture.provider.waitUntilReturned(2)
+
+        #expect(fixture.store.photos == [original])
+        #expect(fixture.store.availability.totalCount == 1)
+        #expect(fixture.store.availability.checkedCount == 0)
+    }
+
+    @Test
+    func coalescedContentNotificationsEachInvalidateTheirCurrentSelection() async {
+        let fixture = LibraryFixture(status: .authorized)
+        let first = samplePhoto("first")
+        let second = samplePhoto("second")
+        await fixture.load([first, second])
+        fixture.store.selectedPhoto = first
+        fixture.provider.sendChange(PhotoLibraryChange(contentChangedIDs: [first.id]))
+        await fixture.provider.waitUntilRequested(2)
+        #expect(fixture.store.selectedPhoto == nil)
+
+        fixture.store.selectedPhoto = second
+        fixture.provider.sendChange(PhotoLibraryChange(contentChangedIDs: [second.id]))
+        #expect(fixture.store.selectedPhoto == nil)
+        #expect(fixture.store.imageRevision == 2)
+        #expect(fixture.provider.requestCount == 2)
+        fixture.provider.complete(2, with: [first, second])
+        await fixture.provider.waitUntilRequested(3)
+        #expect(fixture.store.isLoading)
+        fixture.provider.complete(3, with: [first, second])
+        await fixture.provider.waitUntilReturned(3)
+        #expect(fixture.store.photos == [first, second])
+        #expect(!fixture.store.isLoading)
+    }
+
+    @Test
+    func metadataOnlyNotificationPreservesDisplayedImagesAndSelection() async {
+        let fixture = LibraryFixture(status: .authorized)
+        let original = samplePhoto("favorite")
+        await fixture.load([original])
+        fixture.store.selectedPhoto = original
+
+        fixture.provider.sendChange()
+        await fixture.provider.waitUntilRequested(2)
+        fixture.provider.complete(2, with: [original])
+        await fixture.provider.waitUntilReturned(2)
+
+        #expect(fixture.store.selectedPhoto == original)
+        #expect(fixture.images.cancelAllCount == 0)
+        #expect(fixture.store.imageRevision == 0)
+    }
+
+    @Test
+    func fullInvalidationClosesViewerAndDropsAvailabilityResults() async {
+        let fixture = LibraryFixture(status: .authorized)
+        let original = samplePhoto("selected")
+        await fixture.load([original])
+        fixture.store.selectedPhoto = original
+        fixture.store.availability.start()
+        await fixture.availability.waitUntilRequested()
+
+        fixture.provider.sendChange(PhotoLibraryChange(requiresFullReindex: true))
+
+        #expect(fixture.store.selectedPhoto == nil)
+        #expect(fixture.images.cancelAllCount == 1)
+        #expect(fixture.store.imageRevision == 1)
+        #expect(fixture.availability.cancelCount == 1)
+        #expect(fixture.store.availability.results.isEmpty)
+        await fixture.provider.waitUntilRequested(2)
+        fixture.provider.complete(2, with: [original])
+        await fixture.provider.waitUntilReturned(2)
+    }
+
+    @Test
+    func unrelatedContentChangeKeepsSelectionButRestartsCancelledImageLoaders() async {
+        let fixture = LibraryFixture(status: .authorized)
+        let selected = samplePhoto("selected")
+        let edited = samplePhoto("edited")
+        await fixture.load([selected, edited])
+        fixture.store.selectedPhoto = selected
+
+        fixture.provider.sendChange(PhotoLibraryChange(contentChangedIDs: [edited.id]))
+
+        #expect(fixture.store.selectedPhoto == selected)
+        #expect(fixture.images.cancelAllCount == 1)
+        #expect(fixture.store.imageRevision == 1)
+        await fixture.provider.waitUntilRequested(2)
+        fixture.provider.complete(2, with: [selected, edited])
+        await fixture.provider.waitUntilReturned(2)
+    }
 }
 
 @MainActor
@@ -295,7 +401,7 @@ private final class LibraryProviderStub: PhotoLibraryProviding {
     private(set) var requestCount = 0
     private(set) var startCount = 0
     private(set) var stopCount = 0
-    private var onChange: (@MainActor @Sendable () -> Void)?
+    private var onChange: (@MainActor @Sendable (PhotoLibraryChange) -> Void)?
     private var pending: [Int: CheckedContinuation<[LibraryPhoto], Never>] = [:]
     private var requestedWaiters: [Int: CheckedContinuation<Void, Never>] = [:]
     private var returnedWaiters: [Int: CheckedContinuation<Void, Never>] = [:]
@@ -313,7 +419,7 @@ private final class LibraryProviderStub: PhotoLibraryProviding {
         return photos
     }
 
-    func startObserving(_ onChange: @escaping @MainActor @Sendable () -> Void) {
+    func startObserving(_ onChange: @escaping @MainActor @Sendable (PhotoLibraryChange) -> Void) {
         startCount += 1
         self.onChange = onChange
     }
@@ -323,7 +429,7 @@ private final class LibraryProviderStub: PhotoLibraryProviding {
         onChange = nil
     }
 
-    func sendChange() { onChange?() }
+    func sendChange(_ change: PhotoLibraryChange = PhotoLibraryChange()) { onChange?(change) }
 
     func waitUntilRequested(_ request: Int) async {
         guard requestCount < request else { return }

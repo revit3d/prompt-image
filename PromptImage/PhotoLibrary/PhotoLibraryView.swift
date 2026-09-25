@@ -36,7 +36,9 @@ struct PhotoLibraryView: View {
                             }
                             .padding(.horizontal, 16)
                         }
-                        PhotoAvailabilitySummary(scan: library.availability)
+                        PhotoAvailabilitySummary(scan: library.availability) {
+                            library.indexing?.pause()
+                        }
                             .disabled(library.indexing?.isBusy == true || library.indexing?.wantsToRun == true)
                             .padding(.horizontal, 16)
                     }
@@ -62,6 +64,7 @@ struct PhotoLibraryView: View {
                                     library.selectedPhoto = photo
                                 } label: {
                                     PhotoImageView(photo: photo, isThumbnail: true, provider: library.images)
+                                        .id(library.imageRevision)
                                         .aspectRatio(1, contentMode: .fit)
                                         .overlay(alignment: .bottomTrailing) {
                                             if let result = library.availability.results[photo.id] {
@@ -128,6 +131,7 @@ struct PhotoLibraryView: View {
 
 private struct PhotoAvailabilitySummary: View {
     let scan: PhotoAvailabilityScan
+    let beforeStarting: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -138,9 +142,15 @@ private struct PhotoAvailabilitySummary: View {
                 if scan.isRunning {
                     Button("Пауза") { scan.pause() }
                 } else if scan.uncheckedCount == 0 && scan.hasStarted {
-                    Button("Перепроверить") { scan.restart() }
+                    Button("Перепроверить") {
+                        beforeStarting()
+                        scan.restart()
+                    }
                 } else {
-                    Button(scan.hasStarted ? "Продолжить" : "Проверить") { scan.start() }
+                    Button(scan.hasStarted ? "Продолжить" : "Проверить") {
+                        beforeStarting()
+                        scan.start()
+                    }
                 }
             }
             if scan.hasStarted {

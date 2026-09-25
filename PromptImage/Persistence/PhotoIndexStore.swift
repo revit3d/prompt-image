@@ -67,6 +67,46 @@ actor PhotoIndexStore {
         try database.transaction { try retainOnlyInTransaction(assetIDs: assetIDs) }
     }
 
+    /// Discard obsolete derived data before loading model resources. The caller must
+    /// provide the complete permitted snapshot, never a partial fetch. PhotoKit can
+    /// report changed content with identical metadata; those identifiers invalidate
+    /// both stages too. A nonincremental change can conservatively invalidate all.
+    /// This only removes records; synchronize queues their replacements later.
+    func pruneStaleRecords(matching photos: [LibraryPhoto], invalidatedAssetIDs: Set<String> = [],
+                           invalidateAll: Bool = false) throws {
+        var currentPhotos: [String: LibraryPhoto] = [:]
+        for photo in photos {
+            try Task.checkCancellation()
+            try Self.validate(photo)
+            guard currentPhotos.updateValue(photo, forKey: photo.id) == nil else {
+                throw PhotoIndexError.invalidInput
+            }
+        }
+        for id in invalidatedAssetIDs { try Self.validateIdentifier(id) }
+
+        try database.transaction {
+            if invalidateAll {
+                try database.execute("DELETE FROM photos")
+                return
+            }
+            let rows = try database.query("""
+                SELECT asset_id, creation_date, modification_date, width, height
+                FROM photos ORDER BY asset_id COLLATE BINARY
+                """)
+            for row in rows {
+                let id = try Self.text(row[0])
+                let stored = LibraryPhoto(id: id, creationDate: try Self.date(row[1]),
+                    modificationDate: try Self.date(row[2]), pixelWidth: Int(try Self.integer(row[3])),
+                    pixelHeight: Int(try Self.integer(row[4])))
+                if currentPhotos[id] != stored || invalidatedAssetIDs.contains(id) {
+                    // Cascades remove OCR/FTS and vectors. Readding even identical
+                    // metadata creates a new generation, rejecting previous tickets.
+                    try database.execute("DELETE FROM photos WHERE asset_id = ?", [.text(id)])
+                }
+            }
+        }
+    }
+
     /// Explicit retry leaves successful and currently processing stages intact.
     func retryIncomplete() throws {
         try database.transaction {
@@ -74,6 +114,14 @@ actor PhotoIndexStore {
                 UPDATE stages SET status = 'pending', failure = NULL
                 WHERE status IN ('failed', 'requiresDownload')
                 """)
+        }
+    }
+
+    /// A library refresh may mean iCloud originals became available locally. Recheck
+    /// only those stages; unrelated processing failures still need an explicit retry.
+    func retryDownloads() throws {
+        try database.transaction {
+            try database.execute("UPDATE stages SET status = 'pending' WHERE status = 'requiresDownload'")
         }
     }
 

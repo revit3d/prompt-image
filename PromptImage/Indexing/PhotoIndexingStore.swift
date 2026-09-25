@@ -16,6 +16,9 @@ final class PhotoIndexingStore {
     private(set) var message: String?
     private(set) var currentStage: PhotoIndexStage?
     private(set) var wantsToRun = false
+    /// Armed only by Start/Continue/Retry for this app session. An empty queue
+    /// does not disarm updates, but must never spin up another empty worker.
+    private(set) var followsLibraryChanges = false
     private(set) var isBusy = false
 
     @ObservationIgnored private let provider: any PhotoOCRSourceProviding
@@ -29,6 +32,9 @@ final class PhotoIndexingStore {
     @ObservationIgnored private var synchronizedRevision: Int?
     @ObservationIgnored private var mustClear = false
     @ObservationIgnored private var retryRequested = false
+    @ObservationIgnored private var cloudRecheckRequested = false
+    @ObservationIgnored private var invalidatedAssets: [String: UUID] = [:]
+    @ObservationIgnored private var fullInvalidation: UUID?
     @ObservationIgnored private var blocked = false
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var sourceRequest: PhotoIndexSourceRequest?
@@ -65,8 +71,21 @@ final class PhotoIndexingStore {
             invalidateLibrary()
         } else {
             blocked = false
+            if followsLibraryChanges {
+                wantsToRun = true
+                cloudRecheckRequested = true
+            }
             kick()
         }
+    }
+
+    /// Content changes can be meaningful even when dates/dimensions are equal.
+    /// Tokens keep a second notification for the same asset from being consumed
+    /// by an older reconciliation which was still committing when it arrived.
+    func libraryDidChange(_ change: PhotoLibraryChange) {
+        for id in change.contentChangedIDs { invalidatedAssets[id] = UUID() }
+        if change.requiresFullReindex { fullInvalidation = UUID() }
+        invalidateLibrary()
     }
 
     func invalidateLibrary() {
@@ -86,13 +105,18 @@ final class PhotoIndexingStore {
         summary = .empty
         blocked = false
         message = nil
+        if followsLibraryChanges { wantsToRun = true }
         stopWorker()
         kick()
     }
 
     func revokeAccess() {
         wantsToRun = false
+        followsLibraryChanges = false
         retryRequested = false
+        cloudRecheckRequested = false
+        invalidatedAssets.removeAll()
+        fullInvalidation = nil
         mustClear = true
         blocked = false
         invalidateLibrary()
@@ -101,6 +125,8 @@ final class PhotoIndexingStore {
 
     func start() {
         wantsToRun = true
+        followsLibraryChanges = true
+        cloudRecheckRequested = true
         blocked = false
         message = nil
         kick()
@@ -108,15 +134,29 @@ final class PhotoIndexingStore {
 
     func pause() {
         wantsToRun = false
+        followsLibraryChanges = false
         retryRequested = false
+        cloudRecheckRequested = false
         stopWorker()
         phase = worker == nil ? .paused : .pausing
     }
 
-    /// Retry is explicit: cloud-only and failed stages never form an automatic loop.
+    /// Explicit retry includes failures; ordinary foreground retries include only
+    /// cloud-only stages. Neither path retries repeatedly within the same run.
     func retry() {
         guard worker == nil else { return }
         retryRequested = true
+        start()
+    }
+
+    /// Explicit fallback for a content change missed while the app was closed.
+    /// This discards only derived results, preserving the user's Photos library.
+    func rebuild() {
+        fullInvalidation = UUID()
+        revision += 1
+        synchronizedRevision = nil
+        summary = .empty
+        stopWorker()
         start()
     }
 
@@ -131,7 +171,7 @@ final class PhotoIndexingStore {
 
     private func kick() {
         guard worker == nil, isActive, !blocked, mustClear || photos != nil else { return }
-        guard mustClear || synchronizedRevision != revision || retryRequested || wantsToRun else { return }
+        guard mustClear || synchronizedRevision != revision || retryRequested || cloudRecheckRequested || wantsToRun else { return }
         let runRevision = revision
         phase = synchronizedRevision == revision ? .indexing : .preparing
         isBusy = true
@@ -166,9 +206,18 @@ final class PhotoIndexingStore {
                 phase = .waitingForLibrary
                 return
             }
-            // Privacy cleanup is independent of model availability. A failed
-            // manifest load must not preserve records outside the permitted set.
-            try await database.retainOnly(assetIDs: Set(photos.map(\.id)))
+            // Prune stale content as well as lost access before loading models.
+            // A model error must not leave old OCR searchable for an edited photo.
+            let invalidations = invalidatedAssets
+            let fullToken = fullInvalidation
+            try await database.pruneStaleRecords(matching: photos,
+                invalidatedAssetIDs: Set(invalidations.keys), invalidateAll: fullToken != nil)
+            // Acknowledge only the notifications included in this committed pass.
+            // Newer events, including ones for the same ID, remain pending.
+            for (id, token) in invalidations where invalidatedAssets[id] == token {
+                invalidatedAssets.removeValue(forKey: id)
+            }
+            if fullInvalidation == fullToken { fullInvalidation = nil }
             try checkCurrent(runRevision)
             try await database.recoverInterruptedWork()
             let versions = try await processor.versions()
@@ -179,6 +228,13 @@ final class PhotoIndexingStore {
                 try await database.retryIncomplete()
                 try checkCurrent(runRevision)
                 retryRequested = false
+                cloudRecheckRequested = false
+            } else if cloudRecheckRequested {
+                // Once per explicit start or foreground cycle. Ordinary observer
+                // refreshes do not retry cloud assets or permanent processing errors.
+                try await database.retryDownloads()
+                try checkCurrent(runRevision)
+                cloudRecheckRequested = false
             }
             synchronizedRevision = runRevision
             try await updateSummary(database, revision: runRevision)
@@ -214,6 +270,7 @@ final class PhotoIndexingStore {
             if revision == runRevision, isActive {
                 blocked = true
                 wantsToRun = false
+                followsLibraryChanges = false
                 synchronizedRevision = nil
                 summary = .empty
                 phase = .failed
@@ -233,6 +290,7 @@ final class PhotoIndexingStore {
                     synchronizedRevision = nil
                     blocked = true
                     wantsToRun = false
+                    followsLibraryChanges = false
                     phase = .failed
                     message = "Локальный индекс временно недоступен. Разблокируйте iPhone и попробуйте снова."
                 }
