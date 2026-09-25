@@ -9,7 +9,7 @@ struct CLIPModelResourcesTests {
         let resources = try CLIPModelResources()
 
         #expect(resources.manifest.schemaVersion == 1)
-        #expect(resources.manifest.modelID == "openai-clip-vit-b32-fp16-v1")
+        #expect(resources.manifest.modelID == "openai-clip-vit-b32-fp16-v2")
         #expect(resources.manifest.embeddingDimension == 512)
         #expect(resources.manifest.contextLength == 77)
         #expect(resources.manifest.imageSize == 224)

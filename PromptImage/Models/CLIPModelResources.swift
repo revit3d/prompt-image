@@ -31,7 +31,7 @@ nonisolated enum CLIPModelResourceError: Error, Equatable {
 
 /// Locates the prepared model pair without loading weights during app startup.
 /// The image input is normalized RGB NCHW; both outputs still need L2 normalization.
-nonisolated struct CLIPModelResources {
+nonisolated struct CLIPModelResources: Sendable {
     let manifest: CLIPModelManifest
     let imageEncoderURL: URL
     let textEncoderURL: URL
@@ -39,15 +39,35 @@ nonisolated struct CLIPModelResources {
     let licenseURL: URL
 
     init(bundle: Bundle = .main) throws {
-        imageEncoderURL = try Self.resource("CLIPImageEncoder", extension: "mlmodelc", in: bundle)
-        textEncoderURL = try Self.resource("CLIPTextEncoder", extension: "mlmodelc", in: bundle)
-        tokenizerURL = try Self.resource("tokenizer", extension: "json", in: bundle)
-        licenseURL = try Self.resource("LICENSE", extension: "txt", in: bundle)
-        let manifestURL = try Self.resource("model-manifest", extension: "json", in: bundle)
+        try self.init { name, fileExtension in
+            guard let url = bundle.url(forResource: name, withExtension: fileExtension) else {
+                throw CLIPModelResourceError.missingResource("\(name).\(fileExtension)")
+            }
+            return url
+        }
+    }
+
+    /// Used by the Mac validation tool with the same resources and compiled models.
+    init(directory: URL) throws {
+        try self.init { name, fileExtension in
+            let url = directory.appendingPathComponent(name).appendingPathExtension(fileExtension)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw CLIPModelResourceError.missingResource("\(name).\(fileExtension)")
+            }
+            return url
+        }
+    }
+
+    private init(resolve: (String, String) throws -> URL) throws {
+        imageEncoderURL = try resolve("CLIPImageEncoder", "mlmodelc")
+        textEncoderURL = try resolve("CLIPTextEncoder", "mlmodelc")
+        tokenizerURL = try resolve("tokenizer", "json")
+        licenseURL = try resolve("LICENSE", "txt")
+        let manifestURL = try resolve("model-manifest", "json")
         manifest = try JSONDecoder().decode(CLIPModelManifest.self, from: Data(contentsOf: manifestURL))
 
         guard manifest.schemaVersion == 1,
-              manifest.modelID == "openai-clip-vit-b32-fp16-v1",
+              manifest.modelID == "openai-clip-vit-b32-fp16-v2",
               manifest.embeddingDimension == 512,
               manifest.contextLength == 77,
               manifest.imageSize == 224,
@@ -64,10 +84,4 @@ nonisolated struct CLIPModelResources {
         return try MLModel(contentsOf: url, configuration: configuration)
     }
 
-    private static func resource(_ name: String, extension fileExtension: String, in bundle: Bundle) throws -> URL {
-        guard let url = bundle.url(forResource: name, withExtension: fileExtension) else {
-            throw CLIPModelResourceError.missingResource("\(name).\(fileExtension)")
-        }
-        return url
-    }
 }

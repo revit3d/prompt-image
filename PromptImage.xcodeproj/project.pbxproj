@@ -12,6 +12,7 @@
 		300000000000000000000003 /* tokenizer.json in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000013 /* tokenizer.json */; };
 		300000000000000000000004 /* model-manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000014 /* model-manifest.json */; };
 		300000000000000000000005 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000015 /* LICENSE.txt */; };
+		320000000000000000000001 /* ModelArtifacts/CLIPValidation in Resources */ = {isa = PBXBuildFile; fileRef = 320000000000000000000011 /* ModelArtifacts/CLIPValidation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,30 +33,29 @@
 		300000000000000000000013 /* tokenizer.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tokenizer.json; sourceTree = "<group>"; };
 		300000000000000000000014 /* model-manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "model-manifest.json"; sourceTree = "<group>"; };
 		300000000000000000000015 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
+		320000000000000000000011 /* ModelArtifacts/CLIPValidation */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ModelArtifacts/CLIPValidation; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		100000000000000000000002 /* PromptImageTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = PromptImageTests;
-			sourceTree = "<group>";
-		};
 		000000000000000000000010 /* PromptImage */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PromptImage;
 			sourceTree = "<group>";
 		};
+		100000000000000000000002 /* PromptImageTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PromptImageTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		100000000000000000000003 /* Frameworks */ = {
+		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
-		000000000000000130000000 /* Frameworks */ = {
+		100000000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -68,6 +68,7 @@
 			children = (
 				000000000000000000000010 /* PromptImage */,
 				100000000000000000000002 /* PromptImageTests */,
+				320000000000000000000011 /* ModelArtifacts/CLIPValidation */,
 				300000000000000000000020 /* CLIP Model Artifacts */,
 				000000000000000000000020 /* Products */,
 			);
@@ -98,6 +99,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		000000000000000100000000 /* PromptImage */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "PromptImage" */;
+			buildPhases = (
+				000000000000000120000000 /* Sources */,
+				000000000000000130000000 /* Frameworks */,
+				000000000000000140000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				000000000000000000000010 /* PromptImage */,
+			);
+			name = PromptImage;
+			productName = PromptImage;
+			productReference = 000000000000000000000120 /* PromptImage.app */;
+			productType = "com.apple.product-type.application";
+		};
 		100000000000000000000006 /* PromptImageTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 100000000000000000000007 /* Build configuration list for PBXNativeTarget "PromptImageTests" */;
@@ -119,24 +138,6 @@
 			productReference = 100000000000000000000001 /* PromptImageTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		000000000000000100000000 /* PromptImage */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "PromptImage" */;
-			buildPhases = (
-				000000000000000120000000 /* Sources */,
-				000000000000000130000000 /* Frameworks */,
-				000000000000000140000000 /* Resources */,
-			);
-			buildRules = (
-			);
-			fileSystemSynchronizedGroups = (
-				000000000000000000000010 /* PromptImage */,
-			);
-			name = PromptImage;
-			productName = PromptImage;
-			productReference = 000000000000000000000120 /* PromptImage.app */;
-			productType = "com.apple.product-type.application";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -147,12 +148,12 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					000000000000000100000000 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					100000000000000000000006 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 000000000000000100000000;
-					};
-					000000000000000100000000 = {
-						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -177,13 +178,6 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		100000000000000000000005 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		000000000000000140000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -194,17 +188,21 @@
 				300000000000000000000005 /* LICENSE.txt in Resources */,
 			);
 		};
+		100000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				320000000000000000000001 /* ModelArtifacts/CLIPValidation in Resources */,
+			);
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		100000000000000000000004 /* Sources */ = {
+		000000000000000120000000 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
-		000000000000000120000000 /* Sources */ = {
+		100000000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
@@ -220,60 +218,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = W6R39CB7TU;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
-			};
-			name = Debug;
-		};
-		100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = W6R39CB7TU;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
-			};
-			name = Release;
-		};
 		000000000000000011000000 /* Debug configuration for PBXProject "PromptImage" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -494,17 +438,63 @@
 			};
 			name = Release;
 		};
+		100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W6R39CB7TU;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
+			};
+			name = Debug;
+		};
+		100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W6R39CB7TU;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.revited.promptimage.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PromptImage.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PromptImage";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		100000000000000000000007 /* Build configuration list for PBXNativeTarget "PromptImageTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */,
-				100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */,
-			);
-			defaultConfigurationName = Release;
-		};
 		000000000000000010000000 /* Build configuration list for PBXProject "PromptImage" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -518,6 +508,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "PromptImage" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "PromptImage" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		100000000000000000000007 /* Build configuration list for PBXNativeTarget "PromptImageTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				100000000000000000000008 /* Debug configuration for PBXNativeTarget "PromptImageTests" */,
+				100000000000000000000009 /* Release configuration for PBXNativeTarget "PromptImageTests" */,
 			);
 			defaultConfigurationName = Release;
 		};

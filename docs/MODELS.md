@@ -1,6 +1,6 @@
 # Preparing the CLIP model bundle
 
-Step 3.1 prepares and bundles the two encoders from OpenAI CLIP ViT-B/32. The app exposes resource lookup and explicit model loading; the photo gallery does not run inference yet. Image preprocessing in Swift, tokenization, Russian translation, retrieval evaluation, and device performance are step 3.2 and later.
+Step 3.1 prepares and bundles the two encoders from OpenAI CLIP ViT-B/32. Step 3.2 adds [Swift preprocessing, inference, and numerical validation](INFERENCE.md), including a refined image-model precision policy. The photo gallery does not invoke inference yet; translation, indexing, and search are later steps.
 
 ## First preparation
 
@@ -46,11 +46,11 @@ Offline rebuilding still requires the installed dependencies and both valid cach
 
 ## Provenance and generated files
 
-The model identifier is `openai-clip-vit-b32-fp16-v1`. `tools/models/clip-source.json` pins the [official CLIP source](https://github.com/openai/CLIP/tree/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6), source archive checksum, and official ViT-B/32 checkpoint URL/checksum. The source commit is `d05afc436d78f1c48dc0dbf8e5980a9d471f35f6`; the checkpoint SHA-256 is `40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af`.
+The current model identifier is `openai-clip-vit-b32-fp16-v2`. Version 2 keeps the image convolution in Float32 while retaining FP16 for the remaining image operations and the text encoder. Broader step 3.2 fixtures exposed accumulation error in the fully FP16 convolution; this change restored agreement with the reference at a cost of about 4.5 MiB. Version 1 embeddings must not be mixed with version 2. `tools/models/clip-source.json` pins the [official CLIP source](https://github.com/openai/CLIP/tree/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6), source archive checksum, and official ViT-B/32 checkpoint URL/checksum. The source commit is `d05afc436d78f1c48dc0dbf8e5980a9d471f35f6`; the checkpoint SHA-256 is `40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af`.
 
 The downloaded source includes the [MIT license](https://github.com/openai/CLIP/blob/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6/LICENSE) and [model card](https://github.com/openai/CLIP/blob/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6/model-card.md). Keep these with distributed model artifacts. The model card describes limitations relevant to evaluating this prototype; conversion alone does not establish suitability or retrieval quality. This is the English baseline; Russian queries will require the planned on-device translation stage.
 
-The preparation follows Apple's [PyTorch-to-Core-ML workflow](https://apple.github.io/coremltools/docs-guides/source/convert-pytorch-workflow.html), with separately traced encoders and ML Program export using FP16 compute. The model format's minimum target is iOS 16; this does not change the app's deployment target.
+The preparation follows Apple's [PyTorch-to-Core-ML workflow](https://apple.github.io/coremltools/docs-guides/source/convert-pytorch-workflow.html), with separately traced encoders and ML Program export using the mixed precision policy above. The model format's minimum target is iOS 16; this does not change the app's deployment target.
 
 ```text
 ModelArtifacts/
@@ -87,11 +87,11 @@ The image tensor must be prepared before model inference:
 4. Normalize each channel with `(value - mean) / std`. Means are `[0.48145466, 0.4578275, 0.40821073]`; standard deviations are `[0.26862954, 0.26130258, 0.27577711]`.
 5. Arrange Float32 values as one NCHW tensor: batch, RGB channels, height, width.
 
-The reference for resize/crop/color conversion is the pinned CLIP `_transform` using torchvision/PIL. Matching Swift image decoding, interpolation, crop rounding, and orientation to this reference must be tested on real images in step 3.2. Supplying unnormalized pixels or a BGRA image buffer directly does not meet this contract.
+The reference for resize/crop/color conversion is the pinned CLIP `_transform` using torchvision/PIL. Step 3.2 tests Swift decoding, interpolation, crop rounding, and orientation against synthetic fixtures and selected real photos; see [INFERENCE.md](INFERENCE.md) for measured boundaries. Supplying unnormalized pixels or a BGRA image buffer directly does not meet this contract.
 
-`tokenizer.json` records the complete 49,408-entry vocabulary, ordered BPE merges, byte encoder, token-splitting pattern, cleaning rules, and truncation policy. Cleaning follows the pinned tokenizer: `ftfy.fix_text`, two HTML-unescape passes, strip/collapse Unicode whitespace, and lowercase. The start token is 49406, end token 49407, and padding token 0. A sequence contains a start token, at most 75 content tokens, an end token, and padding to 77 positions; truncation preserves an end token at position 76. A Swift tokenizer must reproduce these rules rather than substitute another CLIP tokenizer or approximate Unicode cleaning.
+`tokenizer.json` records the complete 49,408-entry vocabulary, ordered BPE merges, byte encoder, token-splitting pattern, cleaning rules, and truncation policy. Cleaning follows the pinned tokenizer: `ftfy.fix_text`, two HTML-unescape passes, strip/collapse Unicode whitespace, and lowercase. The start token is 49406, end token 49407, and padding token 0. A sequence contains a start token, at most 75 content tokens, an end token, and padding to 77 positions; truncation preserves an end token at position 76. The Swift tokenizer validates these mappings and reproduces the standard Unicode/HTML cases. It rejects recognized damaged encodings rather than implementing ftfy's full legacy-encoding repair heuristics; see [INFERENCE.md](INFERENCE.md).
 
-Six stored golden token arrays cover empty input, ordinary English, punctuation/HTML entities, combining Unicode characters/emoji, and long-input truncation. They provide reference outputs for implementing Swift tokenization later. Bundling them does not implement tokenization in the app.
+Six stored golden token arrays cover empty input, ordinary English, punctuation/HTML entities, combining Unicode characters/emoji, and long-input truncation. Step 3.2 implements Swift tokenization and checks these and additional reference cases.
 
 ## Validation boundaries
 
@@ -99,15 +99,15 @@ Preparation compares PyTorch eager output with the traced encoders, then compare
 
 The iOS test suite checks bundled manifest/tokenizer/license contents, golden token IDs, and CPU-only loading of both compiled encoders with the expected input/output names, shapes, and data types. `build-for-testing` only compiles this test bundle; run `test` to execute these checks.
 
-These checks establish conversion and packaging integrity. They do not establish photo preprocessing parity, semantic-search accuracy, Russian query quality, iPhone inference speed, memory/battery behavior, or Neural Engine compatibility. Those measurements belong to the next roadmap steps. The current gallery remains the same, and no photo is processed by CLIP yet.
+These checks establish conversion and packaging integrity. They do not establish photo preprocessing parity, semantic-search accuracy, Russian query quality, iPhone inference speed, memory/battery behavior, or Neural Engine compatibility. Step 3.2 supplies separate preprocessing/inference checks and device measurements in [INFERENCE.md](INFERENCE.md). Gallery-driven processing and search remain later work.
 
 ## Step 3.1 validation record
 
-Validated on 2026-09-25 using this pinned recipe, Python 3.11.16, and Xcode 27.0:
+Historical version 1 validation on 2026-09-25, with Python 3.11.16 and Xcode 27.0:
 
 - Both saved Core ML encoders passed Mac CPU prediction checks. Minimum cosine agreement was 0.999604 for images and 0.999968 for text; maximum cross-modal similarity drift was 0.001835.
 - Offline rebuilding, existing-bundle reuse, and the dependency-free integrity check succeeded. The packages occupy approximately 168 MiB (image) and 121 MiB (text) before app packaging.
 - All 33 Python tests passed, including interrupted downloads, checksum failures, stale recipes, and failed-rebuild preservation.
 - Debug app/test-bundle compilation and the Release Simulator build passed. All 55 Swift tests passed on the iPhone 18 Pro / iOS 27.0 Simulator, including actual CPU loading of both compiled encoders, not just test-bundle compilation.
 
-Physical iPhone execution and performance have not been measured for these encoders. Generated per-run evidence remains under ignored `ModelArtifacts/CLIP/smoke-report.json` and `build/`; changing the preparation recipe requires new validation.
+Physical iPhone execution was not measured at step 3.1. For the version 2 results see [INFERENCE.md](INFERENCE.md). Generated per-run evidence remains under ignored `ModelArtifacts/CLIP/smoke-report.json` and `build/`; changing the preparation recipe requires new validation.

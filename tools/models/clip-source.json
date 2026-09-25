@@ -1,5 +1,5 @@
 {
-  "model_id": "openai-clip-vit-b32-fp16-v1",
+  "model_id": "openai-clip-vit-b32-fp16-v2",
   "source_commit": "d05afc436d78f1c48dc0dbf8e5980a9d471f35f6",
   "source_archive": {
     "url": "https://codeload.github.com/openai/CLIP/zip/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6",

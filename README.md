@@ -2,7 +2,7 @@
 
 An iOS prototype for searching a personal photo library with natural-language descriptions. The first release is intended for Russia, with a Russian interface and Russian and English search.
 
-The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Step 3.1 adds repeatable preparation and bundling of the CLIP image/text encoders; the gallery does not run model inference yet. Indexing, OCR, and search are future work.
+The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Step 3.1 adds repeatable preparation and bundling of the CLIP encoders. Step 3.2 adds image/text preprocessing and local embeddings, with independent Python-reference tests. The gallery does not invoke this pipeline yet; indexing, OCR, translation, and search are future work.
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
@@ -35,13 +35,21 @@ ModelArtifacts/.venv/bin/python -m pip install -r tools/models/requirements.txt
 ModelArtifacts/.venv/bin/python tools/prepare_clip.py prepare
 ```
 
-The tool downloads pinned, checksum-verified CLIP source and weights, exports FP16 Core ML encoders, and publishes the bundle only after conversion checks pass. All downloaded/generated files stay in Git-ignored `ModelArtifacts/`. Xcode compiles the explicitly referenced model packages and bundles the tokenizer, manifest, and license; it does not download models during a build. Missing model artifacts are a build error.
+The tool downloads pinned, checksum-verified CLIP source and weights, exports Core ML encoders using mostly FP16 with a Float32 image convolution, and publishes the bundle only after conversion checks pass. All downloaded/generated files stay in Git-ignored `ModelArtifacts/`. Xcode compiles the explicitly referenced model packages and bundles the tokenizer, manifest, and license; it does not download models during a build. Missing model artifacts are a build error.
 
 Repeating `prepare` reuses a matching bundle. `prepare --offline` requires cached downloads; `prepare --rebuild --offline` explicitly rebuilds after preparation-code or dependency changes. Run `python3 tools/prepare_clip.py verify` for a dependency-free integrity check without inference. See [the model guide](docs/MODELS.md) for requirements, tensor/preprocessing contracts, provenance, failure recovery, and validation limits.
 
 ## Build verification
 
 Prepare the model bundle before running these commands from the repository root. They compile for Simulator without development signing; the generic destination does not launch a simulator.
+
+Before **test builds or test runs**, generate the independent reference fixtures too:
+
+```sh
+ModelArtifacts/.venv/bin/python tools/prepare_clip_validation.py prepare --offline
+```
+
+These synthetic fixtures belong only to the test target. See [the inference guide](docs/INFERENCE.md) for preprocessing contracts, Mac comparisons, iPhone benchmarking, and format limits.
 
 Debug app build:
 
@@ -63,12 +71,12 @@ xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Deb
 
 `build-for-testing` checks that the test target compiles; it does not exercise app behavior. `PromptImageTests` contains Swift Testing behavioral tests for permissions, gallery refreshes and selection, image-request lifetimes, and local availability. They cover revocation during a fetch or availability check, changes to limited access, coalesced refreshes, deleted/edited photos, cancellation, stale callbacks, synchronous responses, no-network request options, degraded/empty/error responses, timeouts, serial scanning, and foreground pause/resume. These tests use injected providers; they do not exercise real iCloud storage behavior, PhotoKit image decoding, or the system permission dialog.
 
-The model bundle tests check manifest/tokenizer/license contents and load both compiled encoders on CPU to verify tensor interfaces. They do not measure photo retrieval quality or iPhone performance.
+The model tests verify resources and tensor interfaces, exact token IDs, orientation/cropping/normalization, normalized embeddings, cancellation/unloading, and agreement with independent Python references. A separate benchmark reports inference time and sampled process memory; run it alone in Release on the physical iPhone for useful numbers. Debug preprocessing of the large fixture is substantially slower. These checks do not measure retrieval quality.
 
-Run the behavioral tests on an installed simulator:
+Run the behavioral tests on an installed simulator using Release optimization for the large image fixtures. `ENABLE_TESTABILITY=YES` enables the test target's imports:
 
 ```sh
-xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO test
+xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Release -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -parallel-testing-enabled NO test
 ```
 
 Use `xcrun simctl list devices available` to choose another installed destination if needed. Xcode's **Product → Test** also runs the tests on the selected destination.
@@ -124,13 +132,14 @@ PromptImage/
   PromptImageApp.swift          SwiftUI app entry point
   ContentView.swift             Permission and gallery routing
   PhotoLibrary/                Authorization, gallery, image requests, and availability checks
-  Models/                      CLIP manifest validation and explicit model loading
+  Models/                      CLIP resources, preprocessing, tokenization, and embeddings
   Assets.xcassets/              Bundled app assets
 Configuration/Info.plist        Typed PhotoKit privacy configuration
 PromptImageTests/
   *.swift                      Permission, gallery, image-loader, and availability tests
 docs/EVALUATION.md              Dataset preparation and evaluation protocol
 docs/MODELS.md                  Pinned CLIP preparation and tensor contracts
+docs/INFERENCE.md               Swift inference validation and phone benchmarking
 tools/                         Dataset utilities and CLIP preparation/verification
 PrivateData/                   Local-only sample photos, labels, and indexes
 ModelArtifacts/                Local-only downloaded and converted models

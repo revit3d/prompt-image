@@ -202,12 +202,19 @@ def export_models(source, checkpoint, output, versions, lock):
             print(f"Tracing and converting {name}", flush=True)
             example = torch.from_numpy(samples[0])
             traced = torch.jit.trace(wrapper, example)
+            # The patch convolution loses measurable accuracy in FP16 on Mac CPU.
+            # Keeping that one operation in FP32 adds 4.5 MiB while the transformer
+            # and text encoder retain FP16 weights and computation.
+            precision = (
+                ct.transform.FP16ComputePrecision(op_selector=lambda op: op.op_type != "conv")
+                if name == "CLIPImageEncoder" else ct.precision.FLOAT16
+            )
             converted = ct.convert(
                 traced, source="pytorch", convert_to="mlprogram",
                 inputs=[ct.TensorType(name=input_name, shape=example.shape, dtype=dtype)],
                 outputs=[ct.TensorType(name="embedding", dtype=np.float32)],
                 minimum_deployment_target=ct.target.iOS16,
-                compute_precision=ct.precision.FLOAT16,
+                compute_precision=precision,
                 compute_units=ct.ComputeUnit.CPU_ONLY,
             )
             converted.author = "OpenAI; Core ML conversion by PromptImage"
@@ -216,6 +223,9 @@ def export_models(source, checkpoint, output, versions, lock):
             converted.version = lock["model_id"]
             converted.user_defined_metadata["source_commit"] = lock["source_commit"]
             converted.user_defined_metadata["checkpoint_sha256"] = lock["checkpoint"]["sha256"]
+            converted.user_defined_metadata["compute_precision"] = (
+                "FLOAT16 with conv operations in FLOAT32" if name == "CLIPImageEncoder" else "FLOAT16"
+            )
             converted.save(str(output / f"{name}.mlpackage"))
             # Exercise the serialized model, not just the in-memory conversion result.
             predictor = ct.models.MLModel(str(output / f"{name}.mlpackage"), compute_units=ct.ComputeUnit.CPU_ONLY)
@@ -261,7 +271,11 @@ def export_models(source, checkpoint, output, versions, lock):
         "tokenizer_bpe_sha256": sha256(source / "clip/bpe_simple_vocab_16e6.txt.gz"),
         "license": "MIT", "dependencies": versions,
         "environment": {"python": platform.python_version(), "macos": platform.mac_ver()[0], "architecture": platform.machine()},
-        "conversion": {"format": "mlprogram", "precision": "FLOAT16", "minimum_target": "iOS16", "batch_size": 1},
+        "conversion": {
+            "format": "mlprogram", "precision": "MIXED", "minimum_target": "iOS16", "batch_size": 1,
+            "image_precision": {"default": "FLOAT16", "overrides": {"conv": "FLOAT32"}},
+            "text_precision": "FLOAT16",
+        },
         "image_input": {"name": "image", "dtype": "float32", "shape": [1, 3, 224, 224]},
         "text_input": {"name": "tokens", "dtype": "int32", "shape": [1, 77]},
         "output": {"name": "embedding", "dtype": "float32", "shape": [1, 512], "postprocessing": "L2 normalize before cosine similarity"},
