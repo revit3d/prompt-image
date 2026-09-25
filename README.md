@@ -2,7 +2,7 @@
 
 An iOS prototype for searching a personal photo library with natural-language descriptions. The first release is intended for Russia, with a Russian interface and Russian and English search.
 
-The current app displays Hello World. Step 1.2 establishes the repository layout, shared Xcode scheme, and a Swift Testing unit-test target. Photo access, indexing, OCR, model inference, and search are future work.
+The current app implements step 2.1: a Russian photo-access explanation, a user-triggered permission request, and separate states for full, limited, denied, and system-restricted access. Users can open iOS Settings to change access; the app refreshes permission when it becomes active again. Photo browsing, indexing, OCR, model inference, and search are future work.
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
@@ -44,7 +44,32 @@ Compile the unit-test target and its app host:
 xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build-for-testing
 ```
 
-`PromptImageTests` currently imports Swift Testing and the app module, but contains no behavioral tests. `build-for-testing` checks that the test target compiles; it does not exercise app behavior. Add focused tests as features gain meaningful behavior. Running those tests will require a specific installed simulator or physical device instead of the generic destination.
+`build-for-testing` checks that the test target compiles; it does not exercise app behavior. `PromptImageTests` contains Swift Testing behavioral tests for the permission model: no automatic prompts, permission results, refresh after changes, avoiding repeat prompts, and overlapping requests. They use an injected provider and do not interact with the system permission dialog.
+
+Run the behavioral tests on an installed simulator:
+
+```sh
+xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO test
+```
+
+Use `xcrun simctl list devices available` to choose another installed destination if needed. Xcode's **Product → Test** also runs the tests on the selected destination.
+
+## Verify photo permissions on iPhone
+
+1. Build and run. If access has not been requested, the Russian explanation appears without a system prompt. Tap **Продолжить** to request access.
+2. Choose selected photos in the system dialog. Confirm the app shows **Доступ к выбранным фотографиям**, without requiring full access.
+3. Tap **Изменить доступ** to open the app's iOS Settings. Change the selected photos or allow full access, then return. Full access should show **Полный доступ разрешён**.
+4. In Settings, set Photos access to none and return. Confirm **Доступ к фотографиям закрыт** and an **Открыть настройки** button. Reopening the app must not request permission again automatically.
+5. Restore access in Settings, return, and confirm the screen updates. Also verify after closing and reopening the app.
+6. Where a device policy restricts Photos access, expect **Доступ ограничен системой**, with no repeated request or promise that the app can override the restriction. This state is also covered by the injected-provider tests.
+
+For a fresh first-request test in Simulator, reset only this app's Photos permission:
+
+```sh
+xcrun simctl privacy booted reset photos com.revited.promptimage
+```
+
+Settings controls selection changes in step 2.1; an in-app limited-library picker is not implemented. The app does not fetch photo assets yet. The permission adapter uses PhotoKit's `.readWrite` access level because PhotoKit provides no read-only level for reading existing images; the app performs no library writes. Both build configurations include a Russian `NSPhotoLibraryUsageDescription` for the system dialog.
 
 ## Repository layout
 
@@ -52,10 +77,11 @@ xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Deb
 PromptImage.xcodeproj/          Xcode project and shared PromptImage scheme
 PromptImage/
   PromptImageApp.swift          SwiftUI app entry point
-  ContentView.swift             Initial screen
+  ContentView.swift             Photo-permission screen
+  PhotoLibrary/                PhotoKit authorization adapter and permission state
   Assets.xcassets/              Bundled app assets
 PromptImageTests/
-  PromptImageTests.swift        Swift Testing target
+  PromptImageTests.swift        Permission-model behavioral tests
 docs/EVALUATION.md              Dataset preparation and evaluation protocol
 tools/                         Dataset download, inventory, and validation utilities
 PrivateData/                   Local-only sample photos, labels, and indexes
@@ -73,7 +99,7 @@ As features are added, keep these responsibilities separate within the app:
 - **Persistence:** the local index, processing status, and model versions.
 - **Search:** query processing and ranking visual and OCR matches.
 
-These are implementation boundaries for later milestones, not separate packages or implemented services today.
+The permission UI and photo-authorization model follow these boundaries today; indexing, persistence, and search are not implemented yet.
 
 The evaluation utilities use Python 3.9 or later and its standard library. Run their offline integrity tests with:
 
@@ -87,7 +113,7 @@ Use a focused `codex/` branch, make small commits with simple messages after eac
 
 ## Prototype privacy and data handling
 
-The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. These capabilities are not implemented yet.
+The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app requests photo permission only; processing and search are not implemented yet. Permission is re-read from iOS rather than saved as an independent source of truth.
 
 - Keep personal photos, screenshots, evaluation queries and labels, and generated indexes in `PrivateData/` or outside the repository.
 - Keep downloaded weights and converted models in `ModelArtifacts/`. A later milestone will provide pinned model versions, license records, and repeatable preparation instructions.
