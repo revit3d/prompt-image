@@ -26,6 +26,11 @@ struct PhotoLibraryView: View {
                     }
                     .padding(.horizontal, 16)
 
+                    if !library.photos.isEmpty {
+                        PhotoAvailabilitySummary(scan: library.availability)
+                            .padding(.horizontal, 16)
+                    }
+
                     if library.photos.isEmpty {
                         if !library.isLoading {
                             ContentUnavailableView {
@@ -48,6 +53,11 @@ struct PhotoLibraryView: View {
                                 } label: {
                                     PhotoImageView(photo: photo, isThumbnail: true, provider: library.images)
                                         .aspectRatio(1, contentMode: .fit)
+                                        .overlay(alignment: .bottomTrailing) {
+                                            if let result = library.availability.results[photo.id] {
+                                                availabilityBadge(result)
+                                            }
+                                        }
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(photo.accessibilityDescription)
@@ -66,6 +76,70 @@ struct PhotoLibraryView: View {
                 }
             }
         }
+    }
+
+    private func availabilityBadge(_ result: PhotoAvailability) -> some View {
+        let symbol: String
+        let label: String
+        switch result {
+        case .local:
+            symbol = "checkmark.circle.fill"
+            label = "Данные доступны на iPhone"
+        case .requiresDownload:
+            symbol = "icloud.and.arrow.down"
+            label = "Требуется загрузка из iCloud"
+        case .unavailable:
+            symbol = "exclamationmark.circle.fill"
+            label = "Не удалось проверить"
+        }
+        return Image(systemName: symbol)
+            .font(.caption)
+            .foregroundStyle(.white)
+            .padding(6)
+            .background(.black.opacity(0.7), in: Capsule())
+            .padding(5)
+            .accessibilityLabel(label)
+    }
+}
+
+private struct PhotoAvailabilitySummary: View {
+    let scan: PhotoAvailabilityScan
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Доступность на iPhone")
+                    .font(.headline)
+                Spacer()
+                if scan.isRunning {
+                    Button("Пауза") { scan.pause() }
+                } else if scan.uncheckedCount == 0 && scan.hasStarted {
+                    Button("Перепроверить") { scan.restart() }
+                } else {
+                    Button(scan.hasStarted ? "Продолжить" : "Проверить") { scan.start() }
+                }
+            }
+            if scan.hasStarted {
+                ProgressView(value: Double(scan.checkedCount), total: Double(max(1, scan.totalCount)))
+                Text("Проверено: \(scan.checkedCount) из \(scan.totalCount)")
+                Text("На iPhone: \(scan.localCount) · Пропущено: \(scan.skippedCount)")
+                if scan.skippedCount > 0 {
+                    Text("Нужна загрузка: \(scan.downloadRequiredCount) · Не удалось проверить: \(scan.unavailableCount)")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Проверка покажет, какие снимки доступны без загрузки из iCloud.")
+                    .foregroundStyle(.secondary)
+            }
+            Text("Не проверено: \(scan.uncheckedCount)")
+                .foregroundStyle(.secondary)
+            Text("Фотографии не загружаются из сети. Результаты показывают доступность на момент проверки.")
+                .foregroundStyle(.secondary)
+        }
+        .font(.footnote)
+        .buttonStyle(.bordered)
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
     }
 }
 

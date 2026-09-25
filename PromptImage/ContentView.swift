@@ -21,7 +21,10 @@ struct ContentView: View {
                 permissionScreen
             }
         }
-        .task { library.refresh() }
+        .task {
+            library.availability.setActive(scenePhase == .active)
+            library.refresh()
+        }
         .onChange(of: photoAccess.status) { _, status in
             if status != .authorized && status != .limited {
                 showsAccess = false
@@ -32,6 +35,7 @@ struct ContentView: View {
             if phase == .active {
                 library.refresh()
             }
+            library.availability.setActive(phase == .active)
         }
         .fullScreenCover(item: $library.selectedPhoto) { photo in
             PhotoViewer(photo: library.selectedPhoto ?? photo, provider: library.images)

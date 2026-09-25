@@ -34,6 +34,25 @@ struct PhotoLibraryStoreTests {
         #expect(!fixture.store.isLoading)
         #expect(fixture.provider.startCount == 1)
         #expect(fixture.authorization.requestCount == 0)
+        #expect(fixture.store.availability.totalCount == 1)
+        #expect(!fixture.store.availability.hasStarted)
+    }
+
+    @Test
+    func revocationCancelsAnActiveSourceAvailabilityCheck() async {
+        let fixture = LibraryFixture(status: .authorized)
+        await fixture.load([samplePhoto("pending")])
+        fixture.store.availability.start()
+        await fixture.availability.waitUntilRequested()
+
+        fixture.authorization.status = .denied
+        fixture.store.refresh()
+
+        #expect(fixture.availability.cancelCount == 1)
+        #expect(fixture.store.availability.totalCount == 0)
+        #expect(fixture.store.availability.results.isEmpty)
+        #expect(!fixture.store.availability.isRunning)
+        #expect(!fixture.store.availability.hasStarted)
     }
 
     @Test
@@ -212,6 +231,7 @@ private struct LibraryFixture {
     let authorization: LibraryAuthorizationStub
     let provider = LibraryProviderStub()
     let images = LibraryImagesStub()
+    let availability = LibraryAvailabilityStub()
     let store: PhotoLibraryStore
 
     init(status: PHAuthorizationStatus) {
@@ -219,7 +239,8 @@ private struct LibraryFixture {
         store = PhotoLibraryStore(
             access: PhotoLibraryAccess(provider: authorization),
             provider: provider,
-            images: images
+            images: images,
+            availability: PhotoAvailabilityScan(provider: availability)
         )
     }
 
@@ -229,6 +250,30 @@ private struct LibraryFixture {
         await provider.waitUntilRequested(request)
         provider.complete(request, with: photos)
         await provider.waitUntilReturned(request)
+    }
+}
+
+@MainActor
+private final class LibraryAvailabilityStub: PhotoAvailabilityProviding {
+    private var wasRequested = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    private(set) var cancelCount = 0
+
+    func checkAvailability(
+        of photo: LibraryPhoto,
+        completion: @escaping @MainActor (PhotoAvailability) -> Void
+    ) -> UUID {
+        wasRequested = true
+        waiter?.resume()
+        waiter = nil
+        return UUID()
+    }
+
+    func cancel(_ requestID: UUID) { cancelCount += 1 }
+
+    func waitUntilRequested() async {
+        guard !wasRequested else { return }
+        await withCheckedContinuation { waiter = $0 }
     }
 }
 

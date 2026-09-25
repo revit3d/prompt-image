@@ -2,7 +2,7 @@
 
 An iOS prototype for searching a personal photo library with natural-language descriptions. The first release is intended for Russia, with a Russian interface and Russian and English search.
 
-The current app implements steps 2.1–2.2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, and a full-screen still-image viewer. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Indexing, OCR, model inference, and search are future work.
+The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Indexing, OCR, model inference, and search are future work.
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
@@ -44,7 +44,7 @@ Compile the unit-test target and its app host:
 xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build-for-testing
 ```
 
-`build-for-testing` checks that the test target compiles; it does not exercise app behavior. `PromptImageTests` contains Swift Testing behavioral tests for permissions, gallery refreshes and selection, and image-request lifetimes. They cover revocation during a fetch, changes to limited access, coalesced refreshes, deleted/edited photos, cancellation, stale callbacks, and synchronous image responses. These tests use injected providers; they do not exercise real PhotoKit image decoding or the system permission dialog.
+`build-for-testing` checks that the test target compiles; it does not exercise app behavior. `PromptImageTests` contains Swift Testing behavioral tests for permissions, gallery refreshes and selection, image-request lifetimes, and local availability. They cover revocation during a fetch or availability check, changes to limited access, coalesced refreshes, deleted/edited photos, cancellation, stale callbacks, synchronous responses, no-network request options, degraded/empty/error responses, timeouts, serial scanning, and foreground pause/resume. These tests use injected providers; they do not exercise real iCloud storage behavior, PhotoKit image decoding, or the system permission dialog.
 
 Run the behavioral tests on an installed simulator:
 
@@ -80,9 +80,22 @@ Settings controls selection changes; an in-app limited-library picker is not imp
 5. While the viewer is open, switch to Photos or Settings and remove the displayed photo or revoke its permission. Return: the viewer should close if its photo is no longer available. Restore access and check that browsing works again. Edit a photo in Photos and confirm the app refreshes its image.
 6. Check a photo whose larger image is only in iCloud. A cached thumbnail may appear, but the viewer must show an unavailable/cloud message if it cannot obtain the larger image locally. It must not start a download. Open the photo in Apple's Photos app to download it, then use **Повторить** in the viewer.
 
-The grid count is the number of permitted image assets reported by PhotoKit, including assets whose image data may only be in iCloud. It is not a local-image or indexing count. Step 2.3 will address library-wide local availability and skipped-photo reporting.
+The grid count is the number of permitted image assets reported by PhotoKit, including assets whose image data may only be in iCloud. The separate **Доступность на iPhone** check reports source-data availability across those permitted photos. It does not hide skipped photos from the gallery.
 
 The app fetches metadata off the main thread and decodes images only for visible views. Thumbnails and the viewer use their display size in pixels, rather than original-size image requests. Every PhotoKit image request explicitly disables network access. A local thumbnail is not evidence that the full image is available for later indexing.
+
+## Verify local availability on iPhone
+
+1. Start with a limited selection containing a recent local photo, a screenshot, a Live Photo, and an older iCloud-optimized photo if available. In **Доступность на iPhone**, tap **Проверить**. Browsing alone must not start a source-data scan.
+2. Watch **Проверено**, **На iPhone**, **Пропущено**, and **Не проверено**. Checked equals local + requires-download + failed; checked + unchecked equals the permitted photo count. Skipped equals requires-download + failed. A cached thumbnail must not turn an iCloud-only source into a local result. Tile badges show a checkmark, cloud, or warning for completed checks.
+3. Tap **Пауза**, browse some photos, and tap **Продолжить**. Finished results remain; the interrupted photo is checked again. Switch to another app or lock the phone during a scan: it pauses and resumes when active again. A manually paused scan must remain paused after returning.
+4. Change the limited selection, delete/edit a photo, or revoke access while scanning. Removed/edited results must be discarded, counts must follow the current library, and revocation must clear the check and cancel its request. Narrowing full access to limited access also clears the check; tap **Проверить** again for the new selection.
+5. Complete the scan, open an iCloud-only photo in Apple's Photos app to download its full image data, return, and tap **Перепроверить**. Its status may now become local. Rechecking is explicit because downloads or cache eviction need not change photo metadata.
+6. Repeat with airplane mode enabled. Local data should remain readable, while photos requiring downloads remain skipped. If available, include edited images and a large ProRAW image and observe responsiveness/memory; Simulator tests do not substitute for these device checks.
+
+Availability checks use [`requestImageDataAndOrientation`](https://developer.apple.com/documentation/photos/phimagemanager/requestimagedataandorientation(for:options:resulthandler:)) with `.current`, asynchronous delivery, and `isNetworkAccessAllowed = false`. This requests the largest current representation, including edits, rather than a thumbnail. A successful nonempty, non-degraded response with no error counts as local. An explicit iCloud/network-required result is skipped; other errors, missing/empty data, degraded responses, and a 30-second timeout count as failed checks rather than being assumed to be cloud-only.
+
+Only one source-data request is active at a time. The app reads the compressed data only to check its presence, then discards it without decoding, saving, or logging it. This limits concurrency, not the absolute byte size of one large asset. The scan retains IDs/statuses in memory for the current app session; it is not a persistent index and does not prove successful OCR/model decoding. Availability can change after a check and must be checked again when later processing begins. An initiated scan picks up added or edited photos while active; manual pause disables automatic continuation.
 
 ## Repository layout
 
@@ -91,11 +104,11 @@ PromptImage.xcodeproj/          Xcode project and shared PromptImage scheme
 PromptImage/
   PromptImageApp.swift          SwiftUI app entry point
   ContentView.swift             Permission and gallery routing
-  PhotoLibrary/                Authorization, metadata, image requests, grid, and viewer
+  PhotoLibrary/                Authorization, gallery, image requests, and availability checks
   Assets.xcassets/              Bundled app assets
 Configuration/Info.plist        Typed PhotoKit privacy configuration
 PromptImageTests/
-  *.swift                      Permission, gallery, and image-loader tests
+  *.swift                      Permission, gallery, image-loader, and availability tests
 docs/EVALUATION.md              Dataset preparation and evaluation protocol
 tools/                         Dataset download, inventory, and validation utilities
 PrivateData/                   Local-only sample photos, labels, and indexes
@@ -113,7 +126,7 @@ As features are added, keep these responsibilities separate within the app:
 - **Persistence:** the local index, processing status, and model versions.
 - **Search:** query processing and ranking visual and OCR matches.
 
-The permission and gallery UI, PhotoKit providers, and observable models follow these boundaries today; indexing, persistence, and search are not implemented yet.
+The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today; indexing, persistence, and search are not implemented yet.
 
 The evaluation utilities use Python 3.9 or later and its standard library. Run their offline integrity tests with:
 
@@ -127,7 +140,7 @@ Use a focused `codex/` branch, make small commits with simple messages after eac
 
 ## Prototype privacy and data handling
 
-The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app browses permitted photos without uploading or modifying them; processing and search are not implemented yet. Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery and viewer and cancels pending image requests.
+The planned prototype processes images on the phone, indexes only locally available photos while the app is open, and combines visual search with Russian and English OCR. It will not require a backend or upload the user's images for inference. The current app browses permitted photos and checks local source availability without uploading, downloading from iCloud, or modifying them; indexing and search are not implemented yet. Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery, viewer, and availability results and cancels pending requests.
 
 - Keep personal photos, screenshots, evaluation queries and labels, and generated indexes in `PrivateData/` or outside the repository.
 - Keep downloaded weights and converted models in `ModelArtifacts/`. A later milestone will provide pinned model versions, license records, and repeatable preparation instructions.

@@ -6,6 +6,7 @@ import Photos
 final class PhotoLibraryStore {
     let access: PhotoLibraryAccess
     let images: any PhotoImageProviding
+    let availability: PhotoAvailabilityScan
     private(set) var photos: [LibraryPhoto] = []
     private(set) var isLoading = false
     var selectedPhoto: LibraryPhoto?
@@ -28,17 +29,20 @@ final class PhotoLibraryStore {
     init(
         access: PhotoLibraryAccess,
         provider: any PhotoLibraryProviding,
-        images: any PhotoImageProviding
+        images: any PhotoImageProviding,
+        availability: PhotoAvailabilityScan? = nil
     ) {
         self.access = access
         self.provider = provider
         self.images = images
+        self.availability = availability ?? PhotoAvailabilityScan()
         lastAuthorization = access.status
     }
 
     isolated deinit {
         fetchTask?.cancel()
         provider.stopObserving()
+        availability.pause()
     }
 
     func refresh() {
@@ -74,6 +78,7 @@ final class PhotoLibraryStore {
             photos = []
             selectedPhoto = nil
             images.cancelAll()
+            availability.clear()
         }
         lastAuthorization = access.status
     }
@@ -112,6 +117,7 @@ final class PhotoLibraryStore {
         }
 
         photos = newPhotos
+        availability.updatePhotos(newPhotos)
         if let selectedPhoto {
             self.selectedPhoto = newPhotos.first { $0.id == selectedPhoto.id }
         }
@@ -131,5 +137,6 @@ final class PhotoLibraryStore {
             isObserving = false
         }
         images.cancelAll()
+        availability.clear()
     }
 }
