@@ -18,6 +18,7 @@ struct PhotoIndexProcessorTests {
         let source = ProcessorImageSource(image: textImage())
         let indexing = PhotoIndexingStore(provider: source, processor: processor,
             openStore: { database }, isCurrentAndAccessible: { _ in true })
+        let search = PhotoSearchPipeline(index: indexing)
 
         do {
             let versions = try await processor.versions()
@@ -47,6 +48,20 @@ struct PhotoIndexProcessorTests {
             #expect(recognized.text.localizedCaseInsensitiveContains("cinnamon"))
             #expect(try await database.searchOCR("яблочного cinnamon", version: versions.ocr)
                 .map(\.assetID) == [first.id])
+
+            // Exercise real bundled Russian translation, CLIP text encoding, and
+            // fused retrieval against the real CLIP/Vision results saved above.
+            for (query, language) in [("яблочного пирога", QueryLanguageChoice.russian),
+                                      ("cinnamon", QueryLanguageChoice.english)] {
+                let matches = try await search.search(query, language: language)
+                #expect(matches.map(\.photo.id) == [first.id])
+                let match = try #require(matches.first)
+                #expect(match.visualSimilarity != nil)
+                #expect(match.recognizedText == recognized.text)
+                #expect(abs(match.score - 2.0 / 61.0) < 1e-12)
+            }
+            await search.unload()
+            #expect(source.requests.count == 1)
 
             // The first completed run unloads the image model. Pause a later run
             // while it awaits its source, then resume using the same real processor.
@@ -91,6 +106,7 @@ struct PhotoIndexProcessorTests {
         } catch {
             indexing.pause()
             await indexing.waitForIdle()
+            await search.unload()
             await processor.unload()
             try? await database.close()
             try? FileManager.default.removeItem(at: directory)

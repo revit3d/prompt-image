@@ -6,6 +6,7 @@ struct PhotoLibraryView: View {
     let showAccess: () -> Void
     let showQuerySetup: () -> Void
     let showRetrievalDemo: () -> Void
+    let showPhotoSearch: () -> Void
     var isPreparingInteractiveWork = false
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: 2)]
 
@@ -35,12 +36,19 @@ struct PhotoLibraryView: View {
                                 library.availability.pause()
                             }
                             .padding(.horizontal, 16)
+                            .disabled(library.search?.isWorking == true)
                         }
                         PhotoAvailabilitySummary(scan: library.availability) {
                             library.indexing?.pause()
                         }
-                            .disabled(library.indexing?.isBusy == true || library.indexing?.wantsToRun == true)
+                            .disabled(library.indexing?.isBusy == true || library.indexing?.wantsToRun == true
+                                      || library.search?.isWorking == true)
                             .padding(.horizontal, 16)
+                        if library.search?.isWorking == true {
+                            ProgressView("Завершаем поиск…")
+                                .font(.footnote)
+                                .padding(.horizontal, 16)
+                        }
                     }
 
                     if library.photos.isEmpty {
@@ -86,6 +94,8 @@ struct PhotoLibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
+                        Button("Поиск по фотографиям", systemImage: "photo.badge.magnifyingglass", action: showPhotoSearch)
+                            .disabled(library.search == nil)
                         Button("Тест поиска", systemImage: "magnifyingglass", action: showRetrievalDemo)
                         Button("Язык поиска", systemImage: "character.bubble", action: showQuerySetup)
                     } label: {

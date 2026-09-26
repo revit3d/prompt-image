@@ -42,7 +42,9 @@ final class PhotoKitImageProvider: PhotoImageProviding {
         options.isNetworkAccessAllowed = false
         options.isSynchronous = false
         options.deliveryMode = .highQualityFormat
-        options.resizeMode = .fast
+        // Fit requests include the zoom viewer's bounded local rendition. Ask
+        // Photos to respect that target instead of choosing a larger fast image.
+        options.resizeMode = contentMode == .aspectFit ? .exact : .fast
         options.version = .current
 
         let token = UUID()

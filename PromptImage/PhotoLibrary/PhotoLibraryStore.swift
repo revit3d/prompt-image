@@ -8,6 +8,7 @@ final class PhotoLibraryStore {
     let images: any PhotoImageProviding
     let availability: PhotoAvailabilityScan
     let indexing: PhotoIndexingStore?
+    let search: PhotoSearchStore?
     private(set) var photos: [LibraryPhoto] = []
     private(set) var isLoading = false
     private(set) var imageRevision = 0
@@ -41,6 +42,15 @@ final class PhotoLibraryStore {
         self.images = images
         self.availability = availability ?? PhotoAvailabilityScan()
         self.indexing = indexing
+        if let indexing {
+            let search = PhotoSearchStore(engine: PhotoSearchPipeline(index: indexing), indexState: { [weak indexing] in
+                indexing?.searchState ?? PhotoSearchIndexState(isReady: false, summary: .empty, message: nil)
+            })
+            self.search = search
+            indexing.onSearchInvalidated = { [weak search] in search?.invalidateLibrary() }
+        } else {
+            search = nil
+        }
         lastAuthorization = access.status
     }
 
@@ -76,6 +86,7 @@ final class PhotoLibraryStore {
     }
 
     func setActive(_ active: Bool) {
+        if !active { search?.deactivate() }
         // Following the library may schedule new indexing after any refresh.
         // Keep the diagnostic source scan out of that worker's memory budget.
         if active, indexing?.followsLibraryChanges == true {
@@ -88,7 +99,9 @@ final class PhotoLibraryStore {
     func pauseIndexingForInteractiveWork() async {
         availability.pause()
         indexing?.pause()
+        search?.deactivate()
         await indexing?.waitForIdle()
+        await search?.waitForIdle()
     }
 
     private var canReadPhotos: Bool {

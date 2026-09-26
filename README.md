@@ -2,13 +2,15 @@
 
 An iOS prototype for searching a personal photo library with natural-language descriptions. The first release is intended for Russia, with a Russian interface and Russian and English search.
 
-The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Steps 3.1–3.2 add repeatable CLIP preparation, preprocessing, and local embeddings with independent Python-reference tests. Step 3.3 adds a **Язык поиска** screen and bundled Russian-to-English translation before query encoding. Step 3.4 connects these models in **Тест поиска**, a minimal interface that searches a separately copied public sample using an in-memory index. Step 4.1 adds on-device Russian/English OCR through **Распознать текст** in the photo viewer. Step 4.3 connects OCR and CLIP to persistent foreground photo-library indexing. Combined library search remains milestone 5.
+The current app implements milestone 2: a Russian photo-permission flow, a grid of permitted photos ordered newest first, a full-screen still-image viewer, and a foreground check of local image-data availability. Users can open iOS Settings to change access. The gallery refreshes when the library changes or the app becomes active again. Steps 3.1–3.2 add repeatable CLIP preparation, preprocessing, and local embeddings with independent Python-reference tests. Step 3.3 adds a **Язык поиска** screen and bundled Russian-to-English translation before query encoding. Step 3.4 connects these models in **Тест поиска**, a minimal interface that searches a separately copied public sample using an in-memory index. Step 4.1 adds on-device Russian/English OCR through **Распознать текст** in the photo viewer. Step 4.3 connects OCR and CLIP to persistent foreground photo-library indexing. Personal-library search is available from the gallery’s **Поиск** menu.
 
 Step 1.3 adds a local evaluation dataset and bilingual query protocol. See [the evaluation guide](docs/EVALUATION.md) for the public sample, development/holdout split, and coverage limitations. Dataset images, annotations, and query labels stay under the Git-ignored `PrivateData/Evaluation/` directory.
 
 Step 4.2 supplies the [persistent SQLite index](docs/PERSISTENCE.md): versioned embeddings and OCR, durable processing status, and Russian/English full-text lookup. Step 4.3 adds **Подготовка к поиску** in the gallery: explicit start, saved progress, pause/resume, and retry for skipped photos. See [the indexing guide](docs/INDEXING.md) for phone checks and current limits. The viewer's separate OCR results still remain temporary.
 
 Step 4.4 keeps an enabled index current as photos are added, edited, deleted, or removed from access. PhotoKit content notifications invalidate old results even when metadata is unchanged. Cloud-only stages are rechecked once per enabled foreground/start cycle; failures remain on explicit retry. **Пауза** stops automatic updates, and **⋯ → Перестроить индекс** supplies a manual rebuild fallback. See [library changes and validation](docs/LIBRARY_CHANGES.md).
+
+Milestone 5 adds [personal-library search](docs/SEARCH.md) through **Поиск → Поиск по фотографиям**. Combined search joins original-query OCR with local Russian-to-English visual encoding and model-compatible cosine retrieval using reciprocal-rank fusion. **Текст на фото** searches OCR directly without translation or query models. Results include highlighted OCR excerpts, a zoomable local photo viewer, return-to-results scroll restoration, and coverage counts for each search. The screen handles partial/empty indexes, search failures, cancellation on edits, and result/viewer clearing after access or library changes. Opening search pauses indexing; resume it explicitly in the gallery afterward.
 
 ## Requirements
 
@@ -18,7 +20,7 @@ Step 4.4 keeps an enabled index current as photos are added, edited, deleted, or
 - Russian query translation uses bundled Core ML models and supports the existing iOS 17 deployment target. It is independent of device region/system language, Apple Intelligence, and Apple language packs. See [translation preparation and limits](docs/TRANSLATION.md).
 - For model preparation: a native Apple Silicon Mac, Python 3.11, and network access for initial dependency/model downloads. Subsequent app builds and model loading use local artifacts.
 
-The project retains the working signing and deployment settings from the first successful device run. The app's deployment target currently uses Xcode's `$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)` setting; a fixed minimum iOS version has not been chosen yet.
+The project retains the working signing settings from the first successful device run. The prototype requires iOS 18 or later: step 5.3 uses SwiftUI's scroll geometry and position APIs to restore search results after viewing a photo. Validation currently targets iOS 27; compatibility on older supported OS versions still needs a separate device/runtime check.
 
 ## Open and run
 
@@ -91,6 +93,8 @@ The model tests verify resources and tensor interfaces, exact token IDs, orienta
 Query tests cover language routing, English bypass, translation failure and missing-model states, cancellation, and stale results. Simulator tests also run the real bundled translation model against independent Python outputs. The [physical-device benchmark](docs/TRANSLATION.md#validate-and-try-the-app) checks accelerated inference and records timing/memory; compilation alone does not establish those results.
 
 Retrieval tests cover cosine ranking, model compatibility, deterministic ties, corpus integrity, cancellation, and screen-state lifetimes. A separate [development retrieval evaluation](docs/RETRIEVAL.md#run-the-development-evaluation) runs the real models over the manually transferred sample. It is enabled only when the sample exists in the app's data container; a skipped test is not retrieval validation.
+
+Search tests cover Russian/English query routing into the persistent index, text-only model bypass, fusion/deduplication, independent stage versions, page boundaries, partial indexing, and rejection of cancelled or unauthorized results. Screen-state tests cover query replacement, empty/error states, selection clearing, and waiting for native work before unloading models. The real-model processor integration test also searches its saved CLIP/Vision outputs with bundled translation and query encoding. See [SEARCH.md](docs/SEARCH.md#validation) for focused commands, phone checks, and validation limits.
 
 OCR tests exercise real Vision recognition on synthetic Russian/English text, rotation, blank images, and long screenshots, plus image limits and tile geometry. Injected-provider/store tests cover no-network requests, unavailable sources, timeouts, cancellation, and stale results. See [OCR.md](docs/OCR.md) for the focused test command and manual phone checks. Synthetic recognition does not establish accuracy on personal photos or prove real iCloud behavior.
 
@@ -217,7 +221,7 @@ As features are added, keep these responsibilities separate within the app:
 - **Persistence:** the local index, processing status, and model versions.
 - **Search:** query processing and ranking visual and OCR matches.
 
-The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today. Sample retrieval adds separate ranking, corpus loading, and screen-state coordination. Per-photo OCR separates source access, recognition, and screen state. The persistent index owns storage transactions and versioned state. The [indexing coordinator](docs/INDEXING.md) schedules foreground work, reconciles permitted snapshots, and reports saved progress. The combined personal-library search interface remains milestone 5.
+The permission and gallery UI, PhotoKit providers, availability scan, and observable models follow these boundaries today. Sample retrieval adds separate ranking, corpus loading, and screen-state coordination. Per-photo OCR separates source access, recognition, and screen state. The persistent index owns storage transactions and versioned state. The [indexing coordinator](docs/INDEXING.md) schedules foreground work, reconciles permitted snapshots, and reports saved progress. The [personal-library search screen](docs/SEARCH.md) combines visual and OCR retrieval.
 
 The evaluation utilities use Python 3.9 or later and its standard library. Run their offline integrity tests with:
 
@@ -231,7 +235,7 @@ Use a focused `codex/` branch, make small commits with simple messages after eac
 
 ## Prototype privacy and data handling
 
-The app processes permitted images on the phone without a backend, uploads, iCloud downloads, or changes to the original photos. The gallery's **Подготовка к поиску** flow indexes locally available photos while the app is active and saves CLIP embeddings and Russian/English OCR in the [protected local database](docs/PERSISTENCE.md). Source image bytes are not copied to that database, and private content is not logged. The viewer's separate single-photo OCR result remains temporary. **Тест поиска** searches a separately copied public sample; the combined personal-library search interface remains milestone 5.
+The app processes permitted images on the phone without a backend, uploads, iCloud downloads, or changes to the original photos. The gallery's **Подготовка к поиску** flow indexes locally available photos while the app is active and saves CLIP embeddings and Russian/English OCR in the [protected local database](docs/PERSISTENCE.md). Source image bytes are not copied to that database, and private content is not logged. The viewer's separate single-photo OCR result remains temporary. **Тест поиска** searches a separately copied public sample; **Поиск по фотографиям** searches the permitted personal-library index.
 
 Permission is re-read from iOS rather than saved as an independent source of truth. Revocation clears the gallery, viewer, availability/OCR results, and cancels pending work. The indexing coordinator hides its counts immediately and clears stored derived data once protected storage is available. Library refreshes prune inaccessible records before indexing continues. See [INDEXING.md](docs/INDEXING.md) for lifecycle behavior and the remaining device-validation limits.
 

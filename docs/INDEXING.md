@@ -13,7 +13,7 @@ The gallery's **Подготовка к поиску** card builds a persistent 
 7. Open **Тест поиска**, **Язык поиска**, or **Распознать текст** in the viewer while indexing. The index pauses and drains before the diagnostic opens. Resume indexing explicitly afterward. The separate availability check is disabled during indexing; starting that diagnostic also disables automatic index updates.
 8. Follow the [library-change checks](LIBRARY_CHANGES.md) for additions, edits, deletions, limited access, and the **⋯ → Перестроить индекс** fallback.
 
-Saved vectors and OCR become available to the storage lookup APIs after each stage, even before the rest of the library finishes. This step does not add the combined personal-library search screen: **Тест поиска** still searches the public development sample. Milestone 5 supplies the personal-library query interface and visual/OCR ranking.
+Saved vectors and OCR become available to the storage lookup APIs after each stage, even before the rest of the library finishes. **Тест поиска** still searches the public development sample. [Steps 5.1–5.2](SEARCH.md) add **Поиск по фотографиям** for combined or text-only personal-library queries. Opening that screen pauses indexing too; resume it explicitly after returning.
 
 ## Execution and recovery
 
