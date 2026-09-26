@@ -7,8 +7,10 @@ final class PhotoLibraryStore {
     let access: PhotoLibraryAccess
     let images: any PhotoImageProviding
     let availability: PhotoAvailabilityScan
+    let indexing: PhotoIndexingStore?
     private(set) var photos: [LibraryPhoto] = []
     private(set) var isLoading = false
+    private(set) var imageRevision = 0
     var selectedPhoto: LibraryPhoto?
 
     @ObservationIgnored private let provider: any PhotoLibraryProviding
@@ -22,7 +24,8 @@ final class PhotoLibraryStore {
         self.init(
             access: PhotoLibraryAccess(),
             provider: PhotoKitLibraryProvider(),
-            images: PhotoKitImageProvider()
+            images: PhotoKitImageProvider(),
+            indexing: PhotoIndexingStore()
         )
     }
 
@@ -30,12 +33,14 @@ final class PhotoLibraryStore {
         access: PhotoLibraryAccess,
         provider: any PhotoLibraryProviding,
         images: any PhotoImageProviding,
-        availability: PhotoAvailabilityScan? = nil
+        availability: PhotoAvailabilityScan? = nil,
+        indexing: PhotoIndexingStore? = nil
     ) {
         self.access = access
         self.provider = provider
         self.images = images
         self.availability = availability ?? PhotoAvailabilityScan()
+        self.indexing = indexing
         lastAuthorization = access.status
     }
 
@@ -43,9 +48,13 @@ final class PhotoLibraryStore {
         fetchTask?.cancel()
         provider.stopObserving()
         availability.pause()
+        indexing?.pause()
     }
 
     func refresh() {
+        // A PhotoKit callback or foreground transition can indicate changed
+        // permissions. Stop indexing until a fresh accessible snapshot arrives.
+        indexing?.invalidateLibrary()
         refreshAuthorization()
         guard canReadPhotos else {
             clearLibrary()
@@ -54,8 +63,8 @@ final class PhotoLibraryStore {
 
         if !isObserving {
             isObserving = true
-            provider.startObserving { [weak self] in
-                self?.refresh()
+            provider.startObserving { [weak self] change in
+                self?.libraryDidChange(change)
             }
         }
 
@@ -66,8 +75,40 @@ final class PhotoLibraryStore {
         fetchPhotos()
     }
 
+    func setActive(_ active: Bool) {
+        // Following the library may schedule new indexing after any refresh.
+        // Keep the diagnostic source scan out of that worker's memory budget.
+        if active, indexing?.followsLibraryChanges == true {
+            availability.pause()
+        }
+        availability.setActive(active)
+        indexing?.setActive(active)
+    }
+
+    func pauseIndexingForInteractiveWork() async {
+        availability.pause()
+        indexing?.pause()
+        await indexing?.waitForIdle()
+    }
+
     private var canReadPhotos: Bool {
         access.status == .authorized || access.status == .limited
+    }
+
+    private func libraryDidChange(_ change: PhotoLibraryChange) {
+        // Deliver invalidation before awaiting the coalesced metadata fetch.
+        // The index owns the accumulated IDs until reconciliation succeeds.
+        indexing?.libraryDidChange(change)
+        if change.requiresFullReindex || !change.contentChangedIDs.isEmpty {
+            images.cancelAll()
+            imageRevision += 1
+            availability.clear()
+            if let selectedPhoto,
+               change.requiresFullReindex || change.contentChangedIDs.contains(selectedPhoto.id) {
+                self.selectedPhoto = nil
+            }
+        }
+        refresh()
     }
 
     private func refreshAuthorization() {
@@ -79,6 +120,7 @@ final class PhotoLibraryStore {
             selectedPhoto = nil
             images.cancelAll()
             availability.clear()
+            indexing?.pause()
         }
         lastAuthorization = access.status
     }
@@ -118,6 +160,7 @@ final class PhotoLibraryStore {
 
         photos = newPhotos
         availability.updatePhotos(newPhotos)
+        indexing?.updatePhotos(newPhotos)
         if let selectedPhoto {
             self.selectedPhoto = newPhotos.first { $0.id == selectedPhoto.id }
         }
@@ -138,5 +181,6 @@ final class PhotoLibraryStore {
         }
         images.cancelAll()
         availability.clear()
+        indexing?.revokeAccess()
     }
 }
