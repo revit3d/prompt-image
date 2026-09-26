@@ -10,6 +10,8 @@ Step 4.2 supplies the [persistent SQLite index](docs/PERSISTENCE.md): versioned 
 
 Step 4.4 keeps an enabled index current as photos are added, edited, deleted, or removed from access. PhotoKit content notifications invalidate old results even when metadata is unchanged. Cloud-only stages are rechecked once per enabled foreground/start cycle; failures remain on explicit retry. **Пауза** stops automatic updates, and **⋯ → Перестроить индекс** supplies a manual rebuild fallback. See [library changes and validation](docs/LIBRARY_CHANGES.md).
 
+Step 5.1 adds the [combined library-search pipeline](docs/SEARCH.md): original-query OCR lookup, local Russian-to-English visual query encoding, model-compatible cosine retrieval, and reciprocal-rank fusion with photo-ID deduplication. It uses the existing index owner and checks current access before returning results. This is an internal API with behavioral tests; the personal-library search screen comes in step 5.2.
+
 ## Requirements
 
 - Xcode 27 with its iOS platform support, selected as the active developer environment.
@@ -91,6 +93,8 @@ The model tests verify resources and tensor interfaces, exact token IDs, orienta
 Query tests cover language routing, English bypass, translation failure and missing-model states, cancellation, and stale results. Simulator tests also run the real bundled translation model against independent Python outputs. The [physical-device benchmark](docs/TRANSLATION.md#validate-and-try-the-app) checks accelerated inference and records timing/memory; compilation alone does not establish those results.
 
 Retrieval tests cover cosine ranking, model compatibility, deterministic ties, corpus integrity, cancellation, and screen-state lifetimes. A separate [development retrieval evaluation](docs/RETRIEVAL.md#run-the-development-evaluation) runs the real models over the manually transferred sample. It is enabled only when the sample exists in the app's data container; a skipped test is not retrieval validation.
+
+Combined-search tests cover Russian/English query routing into the persistent index, fusion/deduplication, independent stage versions, page boundaries, partial indexing, and rejection of cancelled or unauthorized results. The real-model processor integration test also searches its saved CLIP/Vision outputs with bundled translation and query encoding. See [SEARCH.md](docs/SEARCH.md#validation) for the focused command and limits of this validation.
 
 OCR tests exercise real Vision recognition on synthetic Russian/English text, rotation, blank images, and long screenshots, plus image limits and tile geometry. Injected-provider/store tests cover no-network requests, unavailable sources, timeouts, cancellation, and stale results. See [OCR.md](docs/OCR.md) for the focused test command and manual phone checks. Synthetic recognition does not establish accuracy on personal photos or prove real iCloud behavior.
 

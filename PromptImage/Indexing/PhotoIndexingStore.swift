@@ -30,6 +30,7 @@ final class PhotoIndexingStore {
     @ObservationIgnored private var isActive = false
     @ObservationIgnored private var revision = 0
     @ObservationIgnored private var synchronizedRevision: Int?
+    @ObservationIgnored private var synchronizedVersions: PhotoIndexVersions?
     @ObservationIgnored private var mustClear = false
     @ObservationIgnored private var retryRequested = false
     @ObservationIgnored private var cloudRecheckRequested = false
@@ -164,6 +165,40 @@ final class PhotoIndexingStore {
         while let worker { await worker.value }
     }
 
+    /// Capture library authorization before query inference, and use the sole
+    /// database owner so searching never resets an in-progress indexing ticket.
+    func search(limit: Int = 50, prepareQuery: () async throws -> PreparedQuery) async throws -> [PhotoSearchMatch] {
+        try Task.checkCancellation()
+        guard (1...ReciprocalRankFusion.candidateLimit).contains(limit) else {
+            throw PhotoSearchError.invalidLimit
+        }
+        guard isActive, !mustClear, synchronizedRevision == revision,
+              let versions = synchronizedVersions, let database else {
+            throw PhotoSearchError.indexNotReady
+        }
+        let searchRevision = revision
+        let query = try await prepareQuery()
+        try checkSearch(searchRevision)
+        guard query.embedding.modelID == versions.embedding else {
+            throw CLIPEmbeddingError.incompatibleModels
+        }
+        let matches = try await database.search(query, ocrVersion: versions.ocr, limit: limit)
+        try checkSearch(searchRevision)
+        // PhotoKit can reveal a removed/edited asset before its observer event.
+        // Do not return its OCR text or scores merely because the index contains it.
+        let accessible = try matches.filter {
+            try checkSearch(searchRevision)
+            return isCurrentAndAccessible($0.photo)
+        }
+        try checkSearch(searchRevision)
+        return accessible
+    }
+
+    private func checkSearch(_ searchRevision: Int) throws {
+        try checkCurrent(searchRevision)
+        guard !mustClear, synchronizedRevision == searchRevision else { throw CancellationError() }
+    }
+
     private func stopWorker() {
         worker?.cancel()
         sourceRequest?.cancel()
@@ -236,6 +271,7 @@ final class PhotoIndexingStore {
                 try checkCurrent(runRevision)
                 cloudRecheckRequested = false
             }
+            synchronizedVersions = versions
             synchronizedRevision = runRevision
             try await updateSummary(database, revision: runRevision)
             if wantsToRun {

@@ -288,11 +288,15 @@ actor PhotoIndexStore {
     func embeddings(modelID: String, afterID: String? = nil, limit: Int = 200) throws -> [SemanticIndexedImage] {
         try Self.validateIdentifier(modelID)
         try Self.validateLimit(limit)
+        // Keep photos first and use a direct range so each page seeks the ID
+        // index instead of rescanning/sorting every completed embedding. IDs
+        // are nonempty, making the empty initial cursor a strict lower bound.
         return try database.query("""
-            SELECT p.asset_id, s.payload FROM stages s JOIN photos p ON p.photo_id = s.photo_id
-            WHERE s.kind = 'embedding' AND s.status = 'complete' AND s.version = ?
-            AND (? IS NULL OR p.asset_id > ?) ORDER BY p.asset_id COLLATE BINARY LIMIT ?
-            """, [.text(modelID), Self.optionalText(afterID), Self.optionalText(afterID), .integer(Int64(limit))]).map {
+            SELECT p.asset_id, s.payload FROM photos p
+            CROSS JOIN stages s ON s.photo_id = p.photo_id AND s.kind = 'embedding'
+            WHERE p.asset_id > ? AND s.status = 'complete' AND s.version = ?
+            ORDER BY p.asset_id COLLATE BINARY LIMIT ?
+            """, [.text(afterID ?? ""), .text(modelID), .integer(Int64(limit))]).map {
                 try SemanticIndexedImage(id: Self.text($0[0]),
                                          embedding: PhotoIndexCodec.decodeEmbedding(Self.blob($0[1]), modelID: modelID))
             }
@@ -311,11 +315,7 @@ actor PhotoIndexStore {
     func searchOCR(_ query: String, version: String, limit: Int = 50) throws -> [PhotoIndexTextMatch] {
         try Self.validateLimit(limit)
         try Self.validateIdentifier(version)
-        guard query.utf8.count <= 4_096 else { throw PhotoIndexError.invalidInput }
-        let terms = query.split { !$0.isLetter && !$0.isNumber }
-        guard terms.count <= 32 else { throw PhotoIndexError.invalidInput }
-        guard !terms.isEmpty else { return [] }
-        let literal = terms.map { "\"\($0)\"" }.joined(separator: " AND ")
+        guard let literal = try PhotoIndexTextQuery.literal(query) else { return [] }
         return try database.query("""
             SELECT p.asset_id, t.text, bm25(ocr_fts) FROM ocr_fts
             JOIN ocr_text t ON t.photo_id = ocr_fts.rowid
