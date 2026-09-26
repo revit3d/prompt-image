@@ -19,7 +19,7 @@ Completed embeddings can be read in model-filtered pages; completed OCR can be f
 
 SQLite [FTS5](https://www.sqlite.org/fts5.html) supplies `unicode61` tokenization for Russian and English. `searchOCR` accepts up to 4,096 UTF-8 bytes and 32 literal word/number terms, combines them with AND, and filters to completed results of the requested OCR version. Punctuation is treated as a separator; user input never becomes SQL or FTS operator syntax. Empty/punctuation-only input returns no matches. Pages are limited to 1–1,000 items.
 
-Results include asset ID, original text, and SQLite's BM25 rank; lower ranks sort first, with asset ID breaking ties. This is word lookup, not semantic ranking or a probability. There is no Russian stemming or prefix matching. [Step 5.1](SEARCH.md) combines this lookup with compatible visual embeddings in one storage-actor operation; its owner checks current access before delivery. The search screen comes in step 5.2.
+Results include asset ID, original text, and SQLite's BM25 rank; lower ranks sort first, with asset ID breaking ties. This is word lookup, not semantic ranking or a probability. There is no Russian stemming or prefix matching. [Step 5.1](SEARCH.md) combines this lookup with compatible visual embeddings in one storage-actor operation; its owner checks current access before delivery. Step 5.2 adds the personal-library search screen and direct text-only retrieval.
 
 ## Files, privacy, and recovery
 

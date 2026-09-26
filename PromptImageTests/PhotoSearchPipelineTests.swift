@@ -52,6 +52,92 @@ struct PhotoSearchPipelineTests {
         }
     }
 
+    @Test(arguments: ["Рецепт блинов", "pancake recipe", "рецепт pancake", "crêpes françaises"])
+    func textOnlySearchBypassesLanguageRoutingTranslationAndEmbedding(query: String) async throws {
+        try await withSearchFixture { fixture in
+            fixture.translator.status = .modelUnavailable
+            fixture.encoder.setModelID("incompatible-query-model")
+            try await fixture.prepare(["text", "visual"])
+            try await fixture.seed("text", visual: false, text: query)
+            try await fixture.seed("visual", visual: true, text: "unrelated")
+
+            let matches = try await fixture.pipeline.search("  \(query)  ", mode: .textOnly)
+
+            #expect(matches.map(\.photo.id) == ["text"])
+            #expect(matches.first?.recognizedText == query)
+            #expect(matches.first?.visualSimilarity == nil)
+            #expect(fixture.translator.availabilityCalls == 0)
+            #expect(fixture.translator.requests.isEmpty)
+            #expect(fixture.encoder.texts.isEmpty)
+            #expect(await fixture.opener.openCount == 1)
+        }
+    }
+
+    @Test
+    func textOnlyUsesCurrentOCRVersionAndFinalPhotoAccessCheck() async throws {
+        try await withSearchFixture { fixture in
+            try await fixture.prepare(["keep", "lost", "obsolete"])
+            try await fixture.seed("keep", visual: false, text: "рецепт")
+            try await fixture.seed("lost", visual: false, text: "рецепт")
+            _ = try await fixture.database.upsert(searchPhoto("obsolete"),
+                versions: PhotoIndexVersions(embedding: searchVersions.embedding, ocr: "obsolete-ocr"))
+            try await fixture.seed("obsolete", visual: false, text: "рецепт")
+            fixture.accessibleIDs = ["keep", "obsolete"]
+
+            let matches = try await fixture.pipeline.search("рецепт", mode: .textOnly)
+
+            #expect(matches.map(\.photo.id) == ["keep"])
+            #expect(try await fixture.database.record(for: "lost") != nil)
+        }
+    }
+
+    @Test(arguments: SearchInvalidation.allCases)
+    func indexInvalidationNotifiesSynchronouslyAndBlocksTextOnlySearch(invalidation: SearchInvalidation) async throws {
+        try await withSearchFixture { fixture in
+            try await fixture.prepare(["a"])
+            try await fixture.seed("a", visual: false, text: "recipe")
+            #expect(fixture.index.searchState.isReady)
+            #expect(fixture.index.searchState.summary == fixture.index.summary)
+            var invalidatedStates: [PhotoSearchIndexState] = []
+            fixture.index.onSearchInvalidated = { invalidatedStates.append(fixture.index.searchState) }
+
+            switch invalidation {
+            case .permission: fixture.index.revokeAccess()
+            case .activity: fixture.index.setActive(false)
+            case .snapshot: fixture.index.updatePhotos([searchPhoto("a")])
+            case .content: fixture.index.libraryDidChange(PhotoLibraryChange(contentChangedIDs: ["a"]))
+            case .library: fixture.index.invalidateLibrary()
+            case .rebuild: fixture.index.rebuild()
+            }
+
+            #expect(invalidatedStates.count == 1)
+            #expect(invalidatedStates.first?.isReady == false)
+            await #expect(throws: PhotoSearchError.indexNotReady) {
+                try await fixture.pipeline.search("recipe", mode: .textOnly)
+            }
+            fixture.index.onSearchInvalidated = nil
+        }
+    }
+
+    @Test
+    func modelPreparationFailureInvalidatesPublishedSearchState() async throws {
+        try await withSearchFixture { fixture in
+            try await fixture.prepare(["a"])
+            var failures: [PhotoSearchIndexState] = []
+            fixture.index.onSearchInvalidated = {
+                if fixture.index.phase == .failed { failures.append(fixture.index.searchState) }
+            }
+            fixture.processor.failVersions = true
+            fixture.index.updatePhotos([searchPhoto("a")])
+            await fixture.index.waitForIdle()
+
+            #expect(failures.count == 1)
+            #expect(failures.first?.isReady == false)
+            #expect(failures.first?.message != nil)
+            fixture.index.onSearchInvalidated = nil
+        }
+    }
+
     @Test
     func incompatibleQueryModelFailsInsteadOfReturningOCRAsASilentFallback() async throws {
         try await withSearchFixture { fixture in
@@ -351,9 +437,13 @@ private final class SearchIndexProcessor: PhotoIndexProcessing {
     private var heldID: String?
     private var continuation: CheckedContinuation<Void, Never>?
     private(set) var embeddingIDs: [String] = []
+    var failVersions = false
     var isWaiting: Bool { continuation != nil }
 
-    @MainActor func versions() async throws -> PhotoIndexVersions { searchVersions }
+    @MainActor func versions() async throws -> PhotoIndexVersions {
+        if failVersions { throw CLIPEmbeddingError.incompatibleModels }
+        return searchVersions
+    }
 
     @MainActor func embedding(_ source: PhotoOCRSource) async throws -> CLIPEmbedding {
         let id = String(decoding: source.data, as: UTF8.self)

@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var showsAccess = false
     @State private var showsQuerySetup = false
     @State private var showsRetrievalDemo = false
+    @State private var showsPhotoSearch = false
     @State private var interactivePresentationTask: Task<Void, Never>?
     @State private var isPreparingInteractiveWork = false
 
@@ -23,6 +24,7 @@ struct ContentView: View {
                 PhotoLibraryView(library: library, showAccess: { showsAccess = true },
                                  showQuerySetup: { presentInteractive(.querySetup) },
                                  showRetrievalDemo: { presentInteractive(.retrievalDemo) },
+                                 showPhotoSearch: { presentInteractive(.photoSearch) },
                                  isPreparingInteractiveWork: isPreparingInteractiveWork)
             } else {
                 permissionScreen
@@ -35,6 +37,7 @@ struct ContentView: View {
         .onChange(of: photoAccess.status) { _, status in
             if status != .authorized && status != .limited {
                 showsAccess = false
+                showsPhotoSearch = false
             }
             library.refresh()
         }
@@ -54,6 +57,11 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showsQuerySetup) { QuerySetupView() }
         .sheet(isPresented: $showsRetrievalDemo) { RetrievalDemoView() }
+        .sheet(isPresented: $showsPhotoSearch, onDismiss: { library.search?.deactivate() }) {
+            if let search = library.search {
+                PhotoSearchView(library: library, store: search)
+            }
+        }
         .sheet(isPresented: $showsAccess) {
             NavigationStack {
                 permissionScreen
@@ -183,6 +191,7 @@ struct ContentView: View {
     private enum InteractiveDestination {
         case querySetup
         case retrievalDemo
+        case photoSearch
     }
 
     private func presentInteractive(_ destination: InteractiveDestination) {
@@ -196,6 +205,7 @@ struct ContentView: View {
             switch destination {
             case .querySetup: showsQuerySetup = true
             case .retrievalDemo: showsRetrievalDemo = true
+            case .photoSearch: showsPhotoSearch = true
             }
         }
     }

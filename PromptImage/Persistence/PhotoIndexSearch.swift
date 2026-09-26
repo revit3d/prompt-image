@@ -1,6 +1,21 @@
 import Foundation
 
 extension PhotoIndexStore {
+    /// Preserves SQLite's BM25 ordering, including its deterministic ID tie-break.
+    /// Neither visual vectors nor model metadata are loaded by text-only search.
+    func searchText(_ text: String, ocrVersion: String, limit: Int = 50) throws -> [PhotoSearchMatch] {
+        try Task.checkCancellation()
+        try PhotoSearchPipeline.validate(text, limit: limit)
+        let ranked = try searchOCR(text, version: ocrVersion, limit: limit)
+        let matches = try ReciprocalRankFusion.combine(visual: [], text: ranked, limit: limit)
+        return try matches.map { match in
+            try Task.checkCancellation()
+            guard let record = try record(for: match.assetID) else { throw PhotoIndexError.invalidStoredData }
+            return PhotoSearchMatch(photo: record.photo, score: match.score,
+                visualSimilarity: nil, recognizedText: match.recognizedText)
+        }
+    }
+
     /// One uninterrupted actor turn reads both channels and their source metadata.
     /// Only the index owner may publish these results after validating current access.
     /// Scans all compatible vectors in bounded pages, including libraries above 10,000.

@@ -99,7 +99,7 @@ Preparation compares PyTorch eager output with the traced encoders, then compare
 
 The iOS test suite checks bundled manifest/tokenizer/license contents, golden token IDs, and CPU-only loading of both compiled encoders with the expected input/output names, shapes, and data types. `build-for-testing` only compiles this test bundle; run `test` to execute these checks.
 
-These checks establish conversion and packaging integrity. They do not establish photo preprocessing parity, semantic-search accuracy, Russian query quality, iPhone inference speed, memory/battery behavior, or Neural Engine compatibility. Step 3.2 supplies separate preprocessing/inference checks and device measurements in [INFERENCE.md](INFERENCE.md). Step 3.4 adds a [development visual retrieval evaluation](RETRIEVAL.md). [Step 4.3](INDEXING.md) connects the image encoder to persistent foreground photo-library indexing; the combined personal-library search interface remains milestone 5.
+These checks establish conversion and packaging integrity. They do not establish photo preprocessing parity, semantic-search accuracy, Russian query quality, iPhone inference speed, memory/battery behavior, or Neural Engine compatibility. Step 3.2 supplies separate preprocessing/inference checks and device measurements in [INFERENCE.md](INFERENCE.md). Step 3.4 adds a [development visual retrieval evaluation](RETRIEVAL.md). [Step 4.3](INDEXING.md) connects the image encoder to persistent foreground photo-library indexing; [steps 5.1–5.2](SEARCH.md) add combined and text-only personal-library search.
 
 ## Step 3.1 validation record
 

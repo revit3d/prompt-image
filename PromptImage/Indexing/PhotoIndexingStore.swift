@@ -5,6 +5,12 @@ nonisolated enum PhotoIndexingPhase: Equatable {
     case waitingForLibrary, preparing, ready, indexing, pausing, paused, finished, failed
 }
 
+nonisolated struct PhotoSearchIndexState: Equatable, Sendable {
+    let isReady: Bool
+    let summary: PhotoIndexSummary
+    let message: String?
+}
+
 /// Owns the database and exactly one worker for the lifetime of the library.
 /// Cancelling invalidates delivery immediately, but the slot stays occupied until
 /// inference has returned, its tickets have been released, and models unloaded.
@@ -20,6 +26,12 @@ final class PhotoIndexingStore {
     /// does not disarm updates, but must never spin up another empty worker.
     private(set) var followsLibraryChanges = false
     private(set) var isBusy = false
+    @ObservationIgnored var onSearchInvalidated: (@MainActor () -> Void)?
+
+    var searchState: PhotoSearchIndexState {
+        PhotoSearchIndexState(isReady: isActive && !mustClear && synchronizedRevision == revision && database != nil,
+                              summary: summary, message: message)
+    }
 
     @ObservationIgnored private let provider: any PhotoOCRSourceProviding
     @ObservationIgnored private let processor: any PhotoIndexProcessing
@@ -27,11 +39,11 @@ final class PhotoIndexingStore {
     @ObservationIgnored private let isCurrentAndAccessible: @MainActor (LibraryPhoto) -> Bool
     @ObservationIgnored private var database: PhotoIndexStore?
     @ObservationIgnored private var photos: [LibraryPhoto]?
-    @ObservationIgnored private var isActive = false
-    @ObservationIgnored private var revision = 0
-    @ObservationIgnored private var synchronizedRevision: Int?
+    private var isActive = false
+    private var revision = 0
+    private var synchronizedRevision: Int?
     @ObservationIgnored private var synchronizedVersions: PhotoIndexVersions?
-    @ObservationIgnored private var mustClear = false
+    private var mustClear = false
     @ObservationIgnored private var retryRequested = false
     @ObservationIgnored private var cloudRecheckRequested = false
     @ObservationIgnored private var invalidatedAssets: [String: UUID] = [:]
@@ -97,6 +109,7 @@ final class PhotoIndexingStore {
         message = nil
         stopWorker()
         phase = worker == nil ? .waitingForLibrary : .pausing
+        onSearchInvalidated?()
     }
 
     func updatePhotos(_ photos: [LibraryPhoto]) {
@@ -108,6 +121,7 @@ final class PhotoIndexingStore {
         message = nil
         if followsLibraryChanges { wantsToRun = true }
         stopWorker()
+        onSearchInvalidated?()
         kick()
     }
 
@@ -158,6 +172,7 @@ final class PhotoIndexingStore {
         synchronizedRevision = nil
         summary = .empty
         stopWorker()
+        onSearchInvalidated?()
         start()
     }
 
@@ -183,6 +198,23 @@ final class PhotoIndexingStore {
             throw CLIPEmbeddingError.incompatibleModels
         }
         let matches = try await database.search(query, ocrVersion: versions.ocr, limit: limit)
+        return try accessibleSearchMatches(matches, revision: searchRevision)
+    }
+
+    func searchText(_ text: String, limit: Int = 50) async throws -> [PhotoSearchMatch] {
+        try Task.checkCancellation()
+        try PhotoSearchPipeline.validate(text, limit: limit)
+        guard isActive, !mustClear, synchronizedRevision == revision,
+              let versions = synchronizedVersions, let database else {
+            throw PhotoSearchError.indexNotReady
+        }
+        let searchRevision = revision
+        let matches = try await database.searchText(text, ocrVersion: versions.ocr, limit: limit)
+        return try accessibleSearchMatches(matches, revision: searchRevision)
+    }
+
+    private func accessibleSearchMatches(_ matches: [PhotoSearchMatch], revision searchRevision: Int) throws
+        -> [PhotoSearchMatch] {
         try checkSearch(searchRevision)
         // PhotoKit can reveal a removed/edited asset before its observer event.
         // Do not return its OCR text or scores merely because the index contains it.
@@ -312,6 +344,7 @@ final class PhotoIndexingStore {
                 phase = .failed
                 message = (error as? PhotoIndexError)?.errorDescription
                     ?? "Не удалось подготовить обработку фотографий. Попробуйте снова."
+                onSearchInvalidated?()
             }
         }
         await processor.unload()
@@ -329,6 +362,7 @@ final class PhotoIndexingStore {
                     followsLibraryChanges = false
                     phase = .failed
                     message = "Локальный индекс временно недоступен. Разблокируйте iPhone и попробуйте снова."
+                    onSearchInvalidated?()
                 }
             }
         }
@@ -404,6 +438,7 @@ final class PhotoIndexingStore {
                     // If locked, recovery is retried only after this worker drains
                     // and a fresh foreground snapshot is available.
                     synchronizedRevision = nil
+                    onSearchInvalidated?()
                     throw error
                 }
             }

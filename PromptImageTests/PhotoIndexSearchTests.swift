@@ -8,6 +8,70 @@ struct PhotoIndexSearchTests {
     private let versions = PhotoIndexVersions(embedding: "search-clip-v1", ocr: "search-ocr-v1")
 
     @Test
+    func textOnlyKeepsBM25OrderMetadataAndCurrentOCRVersion() async throws {
+        try await withStore { store, _ in
+            let original = LibraryPhoto(id: "concentrated",
+                creationDate: Date(timeIntervalSinceReferenceDate: 123),
+                modificationDate: Date(timeIntervalSinceReferenceDate: 456),
+                pixelWidth: 1_024, pixelHeight: 2_048)
+            try await save(original, text: "рецепт рецепт рецепт", in: store)
+            try await save(photo("diluted"), text: "рецепт с яйцами молоком маслом мукой", in: store)
+            try await save(photo("wrong-visual"), versions: .init(embedding: "old-clip", ocr: versions.ocr),
+                text: "рецепт", in: store)
+            try await save(photo("wrong-ocr"), versions: .init(embedding: versions.embedding, ocr: "old-ocr"),
+                vector: embedding(), text: "рецепт", in: store)
+            try await save(photo("visual-only"), vector: embedding(), in: store)
+
+            let expected = try await store.searchOCR("рецепт", version: versions.ocr)
+            let matches = try await store.searchText("рецепт", ocrVersion: versions.ocr)
+
+            #expect(matches.map(\.photo.id) == expected.map(\.assetID))
+            #expect(matches.map(\.recognizedText) == expected.map { Optional($0.text) })
+            #expect(Set(matches.map(\.photo.id)) == ["concentrated", "diluted", "wrong-visual"])
+            #expect(matches.first { $0.photo.id == "concentrated" }?.photo == original)
+            #expect(matches.allSatisfy { $0.visualSimilarity == nil })
+            #expect(try await store.searchText("рецепт", ocrVersion: versions.ocr, limit: 1) == [matches[0]])
+        }
+    }
+
+    @Test
+    func textOnlyUsesLiteralOperatorsAndHandlesPunctuationWithoutVisualFallback() async throws {
+        try await withStore { store, _ in
+            try await save(photo("literal"), text: "кот OR собака", in: store)
+            try await save(photo("both-words"), text: "кот собака", in: store)
+            try await save(photo("visual"), vector: embedding(), in: store)
+
+            let matches = try await store.searchText("\"кот\" OR (собака*)", ocrVersion: versions.ocr)
+            #expect(matches.map(\.photo.id) == ["literal"])
+            #expect(try await store.searchText(" !!!... ", ocrVersion: versions.ocr).isEmpty)
+            #expect(try await store.searchText("absent", ocrVersion: versions.ocr).isEmpty)
+            await #expect(throws: QueryInputError.empty) {
+                try await store.searchText(" \n ", ocrVersion: versions.ocr)
+            }
+            await #expect(throws: PhotoSearchError.invalidLimit) {
+                try await store.searchText("кот", ocrVersion: versions.ocr, limit: 0)
+            }
+            await #expect(throws: QueryInputError.tooLong) {
+                try await store.searchText(String(repeating: "word ", count: 33), ocrVersion: versions.ocr)
+            }
+        }
+    }
+
+    @Test
+    func cancelledTextOnlySearchDoesNotDeliverPersistedOCR() async throws {
+        try await withStore { store, _ in
+            try await save(photo("a"), text: "рецепт", in: store)
+            let ocrVersion = versions.ocr
+            let task = Task {
+                withUnsafeCurrentTask { $0?.cancel() }
+                return try await store.searchText("рецепт", ocrVersion: ocrVersion)
+            }
+            await #expect(throws: CancellationError.self) { try await task.value }
+            #expect(try await store.searchText("рецепт", ocrVersion: versions.ocr).count == 1)
+        }
+    }
+
+    @Test
     func savedSearchResultsAndPhotoMetadataSurviveReopeningWithoutReindexing() async throws {
         try await withStore { store, directory in
             let original = LibraryPhoto(id: "both",

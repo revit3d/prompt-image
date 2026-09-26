@@ -1,5 +1,9 @@
 import Foundation
 
+nonisolated enum PhotoSearchMode: String, CaseIterable, Sendable {
+    case combined, textOnly
+}
+
 nonisolated enum PhotoSearchError: Error, Equatable, LocalizedError {
     case indexNotReady
     case invalidLimit
@@ -20,10 +24,17 @@ nonisolated struct PhotoSearchMatch: Sendable, Equatable {
     let recognizedText: String?
 }
 
+@MainActor
+protocol PhotoSearchServing {
+    func search(_ text: String, language: QueryLanguageChoice, mode: PhotoSearchMode,
+                limit: Int) async throws -> [PhotoSearchMatch]
+    func unload() async
+}
+
 /// Searches the personal library through its existing index owner. Queries and
 /// results stay in memory; no photo source requests or new database connections.
 @MainActor
-final class PhotoSearchPipeline {
+final class PhotoSearchPipeline: PhotoSearchServing {
     private let queryPipeline: QueryEmbeddingPipeline
     private let index: PhotoIndexingStore
 
@@ -37,9 +48,14 @@ final class PhotoSearchPipeline {
     }
 
     func search(_ text: String, language: QueryLanguageChoice = .automatic,
-                limit: Int = 50) async throws -> [PhotoSearchMatch] {
+                mode: PhotoSearchMode = .combined, limit: Int = 50) async throws -> [PhotoSearchMatch] {
         try Task.checkCancellation()
         try Self.validate(text, limit: limit)
+        if mode == .textOnly {
+            // Literal OCR retrieval does not need a supported query language,
+            // translation availability, or a compatible text-embedding model.
+            return try await index.searchText(text, limit: limit)
+        }
         return try await index.search(limit: limit) {
             try await self.queryPipeline.prepare(text, language: language)
         }
