@@ -27,6 +27,10 @@ final class PhotoSearchStore {
     private(set) var message: String?
     private(set) var isWorking = false
     private(set) var selectedPhoto: LibraryPhoto?
+    private(set) var resultContext: PhotoSearchResultContext?
+    private(set) var snippets: [String: PhotoSearchSnippet] = [:]
+    private(set) var resultsScrollOffset: Double = 0
+    private(set) var viewerReturnOffset: Double?
 
     @ObservationIgnored private let engine: any PhotoSearchServing
     @ObservationIgnored private let indexState: @MainActor () -> PhotoSearchIndexState
@@ -80,10 +84,24 @@ final class PhotoSearchStore {
     func select(_ photo: LibraryPhoto) {
         guard isActive, indexState().isReady, phase == .results,
               matches.contains(where: { $0.photo == photo }) else { return }
+        viewerReturnOffset = resultsScrollOffset
         selectedPhoto = photo
     }
 
     func dismissPhoto() { selectedPhoto = nil }
+
+    func recordScrollOffset(_ offset: Double) {
+        guard phase == .results, selectedPhoto == nil, viewerReturnOffset == nil,
+              offset.isFinite else { return }
+        resultsScrollOffset = max(0, offset)
+    }
+
+    /// Called when the cover finishes dismissing, after the underlying scroll
+    /// view is visible again. Invalidation removes the pending return position.
+    func takeViewerReturnOffset() -> Double? {
+        defer { viewerReturnOffset = nil }
+        return viewerReturnOffset
+    }
 
     func waitForIdle() async {
         while let worker { await worker.value }
@@ -112,6 +130,10 @@ final class PhotoSearchStore {
         pending = nil
         matches = []
         selectedPhoto = nil
+        resultContext = nil
+        snippets = [:]
+        resultsScrollOffset = 0
+        viewerReturnOffset = nil
         message = nil
         phase = .idle
     }
@@ -132,14 +154,18 @@ final class PhotoSearchStore {
                self.checkIndex(for: request.mode) {
                 self.pending = nil
                 self.hasUsedEngine = true
+                let coverage = PhotoSearchCoverage(summary: self.indexState().summary, mode: request.mode)
                 do {
                     let results = try await self.engine.search(request.text, language: request.language,
                         mode: request.mode, limit: 50)
                     if self.accepts(request) {
-                        if self.indexState().isReady {
+                        let snippets = try await Self.makeSnippets(results, query: request.text)
+                        if self.accepts(request), self.indexState().isReady {
                             self.matches = results
+                            self.resultContext = PhotoSearchResultContext(query: request.text, coverage: coverage)
+                            self.snippets = snippets
                             self.phase = results.isEmpty ? .noMatches : .results
-                        } else {
+                        } else if self.accepts(request) {
                             self.phase = .waitingForIndex
                         }
                     }
@@ -175,6 +201,26 @@ final class PhotoSearchStore {
 
     private func accepts(_ request: Request) -> Bool {
         isActive && generation == request.generation && !Task.isCancelled
+    }
+
+    nonisolated private static func makeSnippets(_ matches: [PhotoSearchMatch], query: String)
+        async throws -> [String: PhotoSearchSnippet] {
+        // OCR can be long. Keep linear excerpt scanning off the UI actor, and
+        // revalidate the request after this suspension before publishing anything.
+        let task = Task.detached(priority: .userInitiated) {
+            var snippets: [String: PhotoSearchSnippet] = [:]
+            for match in matches {
+                try Task.checkCancellation()
+                if let text = match.recognizedText,
+                   let snippet = PhotoSearchSnippet.make(recognizedText: text, query: query) {
+                    snippets[match.photo.id] = snippet
+                }
+            }
+            try Task.checkCancellation()
+            return snippets
+        }
+        return try await withTaskCancellationHandler { try await task.value }
+        onCancel: { task.cancel() }
     }
 
     private struct Request {

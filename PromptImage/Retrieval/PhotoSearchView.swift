@@ -1,3 +1,4 @@
+import Photos
 import SwiftUI
 
 struct PhotoSearchView: View {
@@ -6,7 +7,8 @@ struct PhotoSearchView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var queryIsFocused: Bool
-    private let columns = [GridItem(.adaptive(minimum: 110), spacing: 4)]
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12, alignment: .top)]
 
     var body: some View {
         NavigationStack {
@@ -18,6 +20,15 @@ struct PhotoSearchView: View {
                 }
                 .padding()
             }
+            .scrollPosition($scrollPosition)
+            .onScrollGeometryChange(for: Double.self) { geometry in
+                Double(geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, offset in
+                store.recordScrollOffset(offset)
+            }
+            .onChange(of: store.resultContext) { _, context in
+                if context == nil { scrollPosition.scrollTo(edge: .top) }
+            }
             .navigationTitle("Поиск фотографий")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -28,8 +39,9 @@ struct PhotoSearchView: View {
                     }
                 }
             }
-            .fullScreenCover(item: Binding(get: { store.selectedPhoto }, set: { _ in store.dismissPhoto() })) { photo in
-                PhotoSearchViewer(photo: photo, provider: library.images)
+            .fullScreenCover(item: Binding(get: { store.selectedPhoto }, set: { _ in store.dismissPhoto() }),
+                             onDismiss: restoreResultsPosition) { photo in
+                PhotoSearchViewer(photo: photo, provider: library.images, snippet: store.snippets[photo.id])
                     .id(library.imageRevision)
             }
         }
@@ -111,11 +123,24 @@ struct PhotoSearchView: View {
                 Text("Вернитесь к фотографиям и запустите «Подготовку к поиску». Уже готовые снимки будут доступны сразу.")
             } actions: { preparationButton }
             .accessibilityIdentifier("photoSearchEmptyIndex")
-        } else if state.summary.completeCount < state.summary.totalCount {
-            Label("Индекс готов частично. Поиск работает по уже подготовленным фотографиям.",
-                  systemImage: "circle.lefthalf.filled")
-                .font(.footnote).foregroundStyle(.secondary)
-                .accessibilityIdentifier("photoSearchPartialIndex")
+        } else {
+            let coverage = store.resultContext?.coverage ?? PhotoSearchCoverage(summary: state.summary, mode: store.mode)
+            VStack(alignment: .leading, spacing: 6) {
+                Label(coverage.title, systemImage: coverage.isComplete ? "checkmark.circle" : "circle.lefthalf.filled")
+                Text(coverage.detail)
+                if store.resultContext != nil {
+                    Text("Готовность фотографий на момент поиска.")
+                }
+                if !coverage.isComplete {
+                    Text("Продолжите подготовку в галерее, чтобы найти больше совпадений.")
+                    preparationButton
+                }
+                if library.access.status == .limited {
+                    Text("Поиск охватывает только фотографии, к которым вы разрешили доступ.")
+                }
+            }
+            .font(.footnote).foregroundStyle(.secondary)
+            .accessibilityIdentifier(coverage.isComplete ? "photoSearchCompleteIndex" : "photoSearchPartialIndex")
         }
     }
 
@@ -138,15 +163,28 @@ struct PhotoSearchView: View {
                     Text("Результаты отсортированы по сходству с запросом. Подходящего снимка среди них может не быть.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                LazyVGrid(columns: columns, spacing: 4) {
+                LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(Array(store.matches.enumerated()), id: \.element.photo.id) { offset, match in
+                        let snippet = store.snippets[match.photo.id]
                         Button { store.select(match.photo) } label: {
-                            PhotoImageView(photo: match.photo, isThumbnail: true, provider: library.images)
-                                .id(library.imageRevision)
-                                .aspectRatio(1, contentMode: .fit)
+                            VStack(alignment: .leading, spacing: 6) {
+                                PhotoImageView(photo: match.photo, isThumbnail: true, provider: library.images)
+                                    .id(library.imageRevision)
+                                    .aspectRatio(1, contentMode: .fit)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                Label(match.recognizedText == nil ? "По описанию" : "Текст на фото",
+                                      systemImage: match.recognizedText == nil ? "photo" : "text.viewfinder")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if let snippet {
+                                    PhotoSearchSnippetText(snippet: snippet)
+                                        .font(.footnote).lineLimit(4)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Результат \(offset + 1)")
+                        .accessibilityLabel("Результат \(offset + 1). \(snippet?.text ?? (match.recognizedText == nil ? "По описанию" : "Текст на фото"))")
                         .accessibilityHint("Открыть фотографию")
                     }
                 }
@@ -188,25 +226,64 @@ struct PhotoSearchView: View {
         queryIsFocused = false
         store.search()
     }
+
+    private func restoreResultsPosition() {
+        if let offset = store.takeViewerReturnOffset() {
+            scrollPosition.scrollTo(y: offset)
+        }
+    }
 }
 
 private struct PhotoSearchViewer: View {
     let photo: LibraryPhoto
     let provider: any PhotoImageProviding
+    let snippet: PhotoSearchSnippet?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            PhotoImageView(photo: photo, isThumbnail: false, provider: provider)
-                .background(.black)
-                .navigationTitle("Фотография")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Закрыть", systemImage: "xmark") { dismiss() }
+            GeometryReader { geometry in
+                ZoomablePhotoView(photo: photo, provider: provider)
+                    .background(.black)
+                    .safeAreaInset(edge: .bottom) {
+                        if let snippet {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Совпадение в распознанном тексте").font(.caption).foregroundStyle(.secondary)
+                                    PhotoSearchSnippetText(snippet: snippet).font(.footnote)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                            }
+                            // Keep the image and zoom controls reachable in
+                            // landscape and at accessibility text sizes.
+                            .frame(height: min(160, geometry.size.height * 0.3))
+                            .background(.ultraThinMaterial)
+                        }
                     }
+            }
+            .navigationTitle("Фотография")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Закрыть", systemImage: "xmark") { dismiss() }
                 }
+            }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct PhotoSearchSnippetText: View {
+    let snippet: PhotoSearchSnippet
+
+    var body: some View { Text(attributedText) }
+
+    private var attributedText: AttributedString {
+        snippet.segments.reduce(into: AttributedString()) { result, segment in
+            var part = AttributedString(segment.text)
+            if segment.isMatch { part.inlinePresentationIntent = .stronglyEmphasized }
+            result.append(part)
+        }
     }
 }

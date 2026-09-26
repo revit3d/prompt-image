@@ -352,14 +352,184 @@ struct PhotoSearchStoreTests {
     func dismissingTheViewerPreservesTheSubmittedQueryAndResults() async {
         let fixture = SearchScreenFixture()
         await fixture.search("recipe")
+        let context = fixture.store.resultContext
+        let snippets = fixture.store.snippets
+        fixture.store.recordScrollOffset(712.5)
         fixture.store.select(searchScreenPhoto("recipe"))
+        #expect(fixture.store.viewerReturnOffset == 712.5)
+        fixture.store.recordScrollOffset(0)
+        #expect(fixture.store.resultsScrollOffset == 712.5)
         fixture.store.dismissPhoto()
 
         #expect(fixture.store.selectedPhoto == nil)
         #expect(fixture.store.text == "recipe")
         #expect(fixture.store.phase == .results)
         #expect(fixture.store.matches.map(\.photo.id) == ["recipe"])
+        #expect(fixture.store.resultContext == context)
+        #expect(fixture.store.snippets == snippets)
+        #expect(fixture.store.resultsScrollOffset == 712.5)
+        #expect(fixture.store.viewerReturnOffset == 712.5)
+        // Dismissal can produce a temporary top-of-screen geometry update.
+        fixture.store.recordScrollOffset(0)
+        #expect(fixture.store.resultsScrollOffset == 712.5)
+        #expect(fixture.store.takeViewerReturnOffset() == 712.5)
+        #expect(fixture.store.takeViewerReturnOffset() == nil)
+        fixture.store.recordScrollOffset(800)
+        #expect(fixture.store.resultsScrollOffset == 800)
         #expect(fixture.engine.requests.count == 1)
+    }
+
+    @Test
+    func resultCoverageDescribesTheIndexAtDispatchAndDoesNotDriftWhileSearching() async throws {
+        let fixture = SearchScreenFixture()
+        defer { fixture.engine.releaseAll() }
+        let dispatchedSummary = searchScreenSummary(embeddings: 2, ocr: 1, pending: 8)
+        fixture.state = PhotoSearchIndexState(isReady: true, summary: dispatchedSummary, message: nil)
+        fixture.engine.heldQueries = ["recipe"]
+        fixture.store.activate()
+        fixture.store.text = "recipe"
+        fixture.store.search()
+        try await searchScreenEventually { fixture.engine.isWaiting(for: "recipe") }
+        #expect(fixture.store.resultContext == nil)
+
+        fixture.state = PhotoSearchIndexState(isReady: true,
+            summary: searchScreenSummary(embeddings: 10, ocr: 10), message: nil)
+        fixture.engine.release("recipe")
+        await fixture.store.waitForIdle()
+
+        #expect(fixture.store.resultContext == PhotoSearchResultContext(query: "recipe",
+            coverage: PhotoSearchCoverage(summary: dispatchedSummary, mode: .combined)))
+        #expect(fixture.store.resultContext?.coverage.isComplete == false)
+        #expect(fixture.store.currentIndex.summary.completeCount == 10)
+    }
+
+    @Test
+    func queuedSearchCapturesCoverageAfterEarlierWorkAndUnloadingFinish() async throws {
+        let fixture = SearchScreenFixture()
+        defer { fixture.engine.releaseAll() }
+        fixture.engine.heldQueries = ["first"]
+        fixture.engine.holdUnload = true
+        fixture.store.activate()
+        fixture.store.text = "first"
+        fixture.store.search()
+        try await searchScreenEventually { fixture.engine.isWaiting(for: "first") }
+
+        fixture.store.deactivate()
+        fixture.store.activate()
+        fixture.store.mode = .textOnly
+        fixture.store.text = "next"
+        fixture.store.search()
+        fixture.engine.release("first")
+        try await searchScreenEventually { fixture.engine.isUnloading }
+        #expect(fixture.store.resultContext == nil)
+        #expect(fixture.engine.requests.map(\.text) == ["first"])
+
+        let latestSummary = searchScreenSummary(embeddings: 0, ocr: 6, pending: 4)
+        fixture.state = PhotoSearchIndexState(isReady: true, summary: latestSummary, message: nil)
+        fixture.engine.releaseUnload()
+        await fixture.store.waitForIdle()
+
+        #expect(fixture.store.resultContext == PhotoSearchResultContext(query: "next",
+            coverage: PhotoSearchCoverage(summary: latestSummary, mode: .textOnly)))
+        #expect(fixture.engine.events == ["search:first", "unload", "search:next"])
+    }
+
+    @Test
+    func noMatchesStillPublishesCoverageForTheSubmittedQuery() async {
+        let fixture = SearchScreenFixture()
+        fixture.engine.emptyResults = true
+        await fixture.search("рецепт")
+
+        #expect(fixture.store.phase == .noMatches)
+        #expect(fixture.store.resultContext?.query == "рецепт")
+        #expect(fixture.store.resultContext?.coverage.summary == fixture.state.summary)
+        #expect(fixture.store.snippets.isEmpty)
+        fixture.store.recordScrollOffset(100)
+        #expect(fixture.store.resultsScrollOffset == 0)
+    }
+
+    @Test
+    func snippetsAreKeyedByPhotoAndUseTheOriginalRussianQuery() async {
+        let fixture = SearchScreenFixture()
+        let recognizedText = "Сохранённый рецепт яблочного пирога с корицей"
+        fixture.engine.resultOverride = [
+            PhotoSearchMatch(photo: searchScreenPhoto("ocr-photo"), score: 0.02,
+                visualSimilarity: nil, recognizedText: recognizedText),
+            PhotoSearchMatch(photo: searchScreenPhoto("visual-photo"), score: 0.01,
+                visualSimilarity: 0.6, recognizedText: nil)
+        ]
+        await fixture.search("пирога")
+
+        #expect(Set(fixture.store.snippets.keys) == ["ocr-photo"])
+        #expect(fixture.store.snippets["ocr-photo"] ==
+            PhotoSearchSnippet.make(recognizedText: recognizedText, query: "пирога"))
+        #expect(fixture.store.snippets["visual-photo"] == nil)
+        #expect(fixture.store.resultContext?.query == "пирога")
+    }
+
+    @Test
+    func scrollOffsetsRequireVisibleResultsAndFiniteNonnegativeValues() async {
+        let fixture = SearchScreenFixture()
+        fixture.store.recordScrollOffset(100)
+        #expect(fixture.store.resultsScrollOffset == 0)
+        await fixture.search("recipe")
+
+        fixture.store.recordScrollOffset(123.25)
+        fixture.store.recordScrollOffset(.nan)
+        fixture.store.recordScrollOffset(.infinity)
+        fixture.store.recordScrollOffset(-.infinity)
+        #expect(fixture.store.resultsScrollOffset == 123.25)
+        fixture.store.recordScrollOffset(-40)
+        #expect(fixture.store.resultsScrollOffset == 0)
+        fixture.store.recordScrollOffset(456)
+        fixture.store.select(searchScreenPhoto("unlisted-photo"))
+        #expect(fixture.store.viewerReturnOffset == nil)
+        #expect(fixture.store.selectedPhoto == nil)
+        fixture.store.cancel()
+        fixture.store.recordScrollOffset(200)
+        #expect(fixture.store.resultsScrollOffset == 0)
+    }
+
+    @Test(arguments: SearchResultResetAction.allCases)
+    func resettingResultsClearsTheirContextSnippetsAndPendingViewerPosition(action: SearchResultResetAction) async {
+        let fixture = SearchScreenFixture()
+        await fixture.search("recipe")
+        fixture.store.recordScrollOffset(600)
+        fixture.store.select(searchScreenPhoto("recipe"))
+        #expect(fixture.store.resultContext != nil)
+        #expect(!fixture.store.snippets.isEmpty)
+        #expect(fixture.store.viewerReturnOffset == 600)
+
+        switch action {
+        case .text: fixture.store.text = "new recipe"
+        case .language: fixture.store.language = .english
+        case .mode: fixture.store.mode = .textOnly
+        case .library: fixture.store.invalidateLibrary()
+        case .deactivate: fixture.store.deactivate()
+        case .cancel: fixture.store.cancel()
+        case .failedSearch:
+            fixture.engine.nextError = QueryTranslationError.modelUnavailable
+            fixture.store.search()
+        case .invalidQuery:
+            fixture.store.text = ""
+            fixture.store.search()
+        }
+
+        #expect(fixture.store.matches.isEmpty)
+        #expect(fixture.store.selectedPhoto == nil)
+        #expect(fixture.store.resultContext == nil)
+        #expect(fixture.store.snippets.isEmpty)
+        #expect(fixture.store.resultsScrollOffset == 0)
+        #expect(fixture.store.takeViewerReturnOffset() == nil)
+        // A stale cover-dismiss callback cannot recover the old position.
+        fixture.store.dismissPhoto()
+        await fixture.store.waitForIdle()
+        #expect(fixture.store.resultContext == nil)
+        #expect(fixture.store.snippets.isEmpty)
+        #expect(fixture.store.viewerReturnOffset == nil)
+        if action == .failedSearch || action == .invalidQuery {
+            #expect(fixture.store.phase == .failed)
+        }
     }
 
     @Test
@@ -409,6 +579,10 @@ nonisolated enum SearchScreenEdit: CaseIterable, Sendable {
     case text, language, mode
 }
 
+nonisolated enum SearchResultResetAction: CaseIterable, Sendable {
+    case text, language, mode, library, deactivate, cancel, failedSearch, invalidQuery
+}
+
 @MainActor
 private final class SearchScreenFixture {
     let engine = SearchScreenEngine()
@@ -445,6 +619,7 @@ private final class SearchScreenEngine: PhotoSearchServing {
     var heldQueries: Set<String> = []
     var holdUnload = false
     var emptyResults = false
+    var resultOverride: [PhotoSearchMatch]?
     var nextError: (any Error)?
     private(set) var requests: [Request] = []
     private(set) var unloadCount = 0
@@ -465,11 +640,13 @@ private final class SearchScreenEngine: PhotoSearchServing {
         let error = nextError
         nextError = nil
         let shouldReturnEmpty = emptyResults
+        let suppliedResults = resultOverride
         if heldQueries.remove(text) != nil {
             await withCheckedContinuation { queries[text] = $0 }
         }
         if let error { throw error }
         if shouldReturnEmpty { return [] }
+        if let suppliedResults { return suppliedResults }
         return [PhotoSearchMatch(photo: searchScreenPhoto(text), score: 0.02,
             visualSimilarity: mode == .combined ? 0.4 : nil, recognizedText: "recipe")]
     }

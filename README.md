@@ -10,7 +10,7 @@ Step 4.2 supplies the [persistent SQLite index](docs/PERSISTENCE.md): versioned 
 
 Step 4.4 keeps an enabled index current as photos are added, edited, deleted, or removed from access. PhotoKit content notifications invalidate old results even when metadata is unchanged. Cloud-only stages are rechecked once per enabled foreground/start cycle; failures remain on explicit retry. **Пауза** stops automatic updates, and **⋯ → Перестроить индекс** supplies a manual rebuild fallback. See [library changes and validation](docs/LIBRARY_CHANGES.md).
 
-Steps 5.1–5.2 add [personal-library search](docs/SEARCH.md) through **Поиск → Поиск по фотографиям**. Combined search joins original-query OCR with local Russian-to-English visual encoding and model-compatible cosine retrieval using reciprocal-rank fusion. **Текст на фото** searches OCR directly without translation or query models. The screen handles partial/empty indexes, search failures, cancellation on edits, and result/viewer clearing after access or library changes. Opening search pauses indexing; resume it explicitly in the gallery afterward.
+Milestone 5 adds [personal-library search](docs/SEARCH.md) through **Поиск → Поиск по фотографиям**. Combined search joins original-query OCR with local Russian-to-English visual encoding and model-compatible cosine retrieval using reciprocal-rank fusion. **Текст на фото** searches OCR directly without translation or query models. Results include highlighted OCR excerpts, a zoomable local photo viewer, return-to-results scroll restoration, and coverage counts for each search. The screen handles partial/empty indexes, search failures, cancellation on edits, and result/viewer clearing after access or library changes. Opening search pauses indexing; resume it explicitly in the gallery afterward.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Steps 5.1–5.2 add [personal-library search](docs/SEARCH.md) through **Поис
 - Russian query translation uses bundled Core ML models and supports the existing iOS 17 deployment target. It is independent of device region/system language, Apple Intelligence, and Apple language packs. See [translation preparation and limits](docs/TRANSLATION.md).
 - For model preparation: a native Apple Silicon Mac, Python 3.11, and network access for initial dependency/model downloads. Subsequent app builds and model loading use local artifacts.
 
-The project retains the working signing and deployment settings from the first successful device run. The app's deployment target currently uses Xcode's `$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)` setting; a fixed minimum iOS version has not been chosen yet.
+The project retains the working signing settings from the first successful device run. The prototype requires iOS 18 or later: step 5.3 uses SwiftUI's scroll geometry and position APIs to restore search results after viewing a photo. Validation currently targets iOS 27; compatibility on older supported OS versions still needs a separate device/runtime check.
 
 ## Open and run
 

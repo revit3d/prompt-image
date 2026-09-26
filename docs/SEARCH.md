@@ -1,8 +1,8 @@
-# Steps 5.1–5.2: photo-library search
+# Milestone 5: photo-library search
 
 The internal `PhotoSearchPipeline` searches the persistent personal-library index with a Russian or English query. It preserves the original input for OCR lookup, uses the bundled on-device translator for Russian visual queries, and encodes the English description with CLIP. It makes no image requests, downloads, or uploads, and does not save queries or log private content.
 
-Step 5.2 adds **Поиск → Поиск по фотографиям** to the gallery. Combined search is selected initially; **Текст на фото** searches the original OCR words directly without translation, language detection, or CLIP query inference. **Тест поиска** remains a separate diagnostic for the public sample. OCR snippets and zoom remain step 5.3.
+Step 5.2 adds **Поиск → Поиск по фотографиям** to the gallery. Combined search is selected initially; **Текст на фото** searches the original OCR words directly without translation, language detection, or CLIP query inference. Step 5.3 adds highlighted OCR excerpts, a zoomable local photo viewer, explicit scroll restoration, and index coverage for each search. **Тест поиска** remains a separate diagnostic for the public sample.
 
 ## Try the search screen
 
@@ -11,9 +11,22 @@ Step 5.2 adds **Поиск → Поиск по фотографиям** to the g
 3. Switch to **Текст на фото** and enter words visible in a screenshot or recipe. The language picker is unnecessary in this mode. All words must appear in recognized text; this is word lookup, not an exact-phrase or substring guarantee. If nothing matches, **Текст не найден** explains how to refine the query.
 4. Edit the query, language, or mode while a search runs. Results clear immediately. Searches run only on explicit submission, not on every keystroke. If you submit again while an old native call is finishing, only the latest submitted query waits to run. **Отмена** drops that request too.
 5. With no completed analysis, expect **Пока нечего искать** (or **Текст ещё не подготовлен**). **К подготовке фотографий** returns to the gallery. A partially prepared index remains searchable; unavailable storage/library state displays guidance and disables submission. A translation error offers English or text-only search without a server fallback.
-6. Tap a result to view it, then close it and confirm the query/results remain. Switch apps or lock the phone with results or a viewer open: both must clear. On return, wait for the permitted library to refresh and submit again. Repeat after editing/deleting a result or changing selected-photo access in Settings.
+6. Look for **Текст на фото** and a matching excerpt under text results; the original query words are bold. Visual-only results say **По описанию**. Open a result, pinch or double-tap to zoom, pan across it, and use **Вписать в экран** to reset. The visible zoom buttons and VoiceOver actions offer the same operations. Try a long screenshot and rotate the phone; rotation refits the image.
+7. Scroll several rows down, open a result, then close it. The query, mode, results, and scroll position must remain without another search. The viewer shows the same bounded OCR excerpt when available. Check larger accessibility text sizes and VoiceOver labels on the result cards and viewer controls.
+8. Check coverage with a partially prepared library and again after finishing preparation. Text-only coverage needs completed OCR; combined coverage needs both stages. With limited Photos access, the screen explicitly scopes coverage to the allowed photos. Cloud-only/failed/unprocessed stages keep the relevant coverage partial. A no-match search still shows its coverage.
+9. Switch apps or lock the phone with results or a viewer open: both must clear. On return, wait for the permitted library to refresh and submit again. Repeat after editing/deleting a result or changing selected-photo access in Settings. Previously displayed excerpts and saved return positions must clear with those results.
 
-The screen returns at most 50 results and suggests refining the query when that limit is reached. Photo display uses the existing local-only image provider. Queries remain in memory for the app session and are not saved as history. Zoom, OCR snippets, detailed result coverage, and broader navigation polish are later work.
+The screen returns at most 50 results and suggests refining the query when that limit is reached. Queries remain in memory for the app session and are not saved as history.
+
+## Result explanations and viewing
+
+OCR excerpts use only text already returned by the index. They highlight literal words from the original query, retain recognized spelling, normalize whitespace, and show at most 200 characters around the first matching word. Ellipses mark omitted context; distant query words may lie outside the excerpt. The cards show four lines, while the viewer shows the bounded excerpt. OCR can contain recognition errors. Highlighting approximates SQLite's tokenization conservatively (including common Latin accents while preserving Russian е/ё); unusual Unicode forms can yield a text result without a highlighted excerpt. SQLite alone decides whether a photo matches. Excerpts are prepared once off the UI actor and are neither logged nor persisted separately.
+
+Coverage is frozen when the submitted search actually starts, after older inference/unloading finishes. Opening the screen pauses and drains indexing, so the UI searches that prepared snapshot. Visual and OCR counts are shown separately; they overlap and are never added into a unique-photo total. Full coverage refers to all permitted photos, not the user's inaccessible, hidden, or unselected library. It does not promise recognition accuracy or a relevant result. A fresh submission captures fresh coverage.
+
+The viewer opens the current local Photos image rendition through the existing network-disabled provider. It requests the source dimensions up to 16 megapixels and 8,192 pixels on the longest edge, with exact resizing for fit requests. This is a requested rendition bound, not a guarantee about PhotoKit's internal decoding memory; very large originals are not shown at full source resolution. Long screenshots can zoom to screen width. Cloud-only photos retain the explicit guidance to download them in Apple's Photos app; PromptImage does not initiate a download. Leaving the viewer or making the app inactive cancels image loading.
+
+UIKit retains pinch/pan state between ordinary SwiftUI updates. A new image or changed viewport refits the image. Search stores the scroll offset before opening the viewer and restores it when dismissal completes. Query edits, cancellation, library/access changes, and deactivation clear results, snippets, coverage, and the return offset together.
 
 ## Retrieval and ranking
 
@@ -48,6 +61,11 @@ xcodebuild -project PromptImage.xcodeproj -scheme PromptImage -configuration Rel
   -only-testing:PromptImageTests/PhotoIndexSearchTests \
   -only-testing:PromptImageTests/PhotoSearchPipelineTests \
   -only-testing:PromptImageTests/PhotoSearchStoreTests \
+  -only-testing:PromptImageTests/PhotoSearchSnippetTests \
+  -only-testing:PromptImageTests/PhotoSearchCoverageTests \
+  -only-testing:PromptImageTests/PhotoZoomTests \
+  -only-testing:PromptImageTests/PhotoSearchViewTests \
+  -only-testing:PromptImageTests/PhotoImageLoaderTests \
   -only-testing:PromptImageTests/PhotoLibrarySearchTests \
   -only-testing:PromptImageTests/PhotoLibraryStoreTests \
   -only-testing:PromptImageTests/PhotoIndexProcessorTests \
@@ -63,4 +81,8 @@ For a physical device, select the paired iPhone, use `build/DeviceDerivedData`, 
 
 Validated on 2026-09-26 with Xcode 27.0 in Release on both the iPhone 18 Pro / iOS 27.0 simulator and the paired iPhone 17 Pro / iOS 27.0. All 82 test functions in the eight selected suites passed on each destination (118 executions including parameterized cases), with no failures or skips. Both runs executed the real-model integration test, including combined Russian/English retrieval. An independent SQLite query-plan check also confirmed that vector pages seek through the photo-ID index without repeatedly sorting the full library; this is not an on-device search-latency benchmark.
 
-Step 5.2 was validated on the same date/devices with the expanded eleven-suite command above: all 129 test functions passed on each destination (184 executions including parameterized cases), with no failures, skips, or reported runtime warnings. This includes the production library/search wiring and real-model integration. These automated checks exercise state, retrieval, and lifecycle coordination; the SwiftUI viewer transitions and real Photos changes still need the manual screen checks listed above.
+Step 5.2 was validated on the same date/devices with eleven selected suites: all 129 test functions passed on each destination (184 executions including parameterized cases), with no failures, skips, or reported runtime warnings. This includes the production library/search wiring and real-model integration.
+
+Step 5.3 was validated on the same date/devices with the sixteen-suite command above: **169 test functions / 243 executions passed on each destination**, with no failures, skips, or reported runtime warnings. New checks cover bounded Unicode snippets, frozen mode-specific coverage, clearing all derived presentation state, image-request dimensions, and actual UIKit fit/zoom/pan/accessibility behavior. A hosted SwiftUI test presents the real full-screen viewer using synthetic images, deliberately moves the hidden results scroll view, then verifies dismissal restores its prior offset without a new search. It also checks that library invalidation dismisses the actual cover. Synthetic result/viewer screenshots were exported and visually inspected. The real-model indexing/retrieval integration continues to pass.
+
+Physical pinch gestures, VoiceOver navigation, landscape/large-text layout, real Photos access-change timing, and real iCloud storage still need the manual checks above. Tests on iOS 27 do not establish behavior on iOS 18–26.
